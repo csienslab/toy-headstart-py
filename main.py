@@ -20,7 +20,8 @@ class Parameters:
 
 
 class VDFComputation:
-    def __init__(self, x, T):
+    def __init__(self, bits, x, T):
+        self.bits = bits
         self.x = x
         self.T = T
         self.done = False
@@ -29,7 +30,9 @@ class VDFComputation:
 
     def run(self):
         # pari doesn't play nice with threads :(
-        out = check_output([sys.executable, vdf.__file__, self.x.hex(), str(self.T)])
+        out = check_output(
+            [sys.executable, vdf.__file__, str(self.bits), self.x.hex(), str(self.T)]
+        )
         ln = (Parameters.bits // 8 + 1) * 3
         self.y = qf_frombytes(out[:ln], Parameters.bits)
         self.pi = qf_frombytes(out[ln:], Parameters.bits)
@@ -57,7 +60,7 @@ class Server:
             raise ValueError("not in contribution phase")
         self.phase = Phase.EVALUATION
         self.mkt = MerkleTree.from_data(sha256, self.data)
-        self.vdf = VDFComputation(self.mkt.root, Parameters.T)
+        self.vdf = VDFComputation(Parameters.bits, self.mkt.root, Parameters.T)
 
     def get_tree(self):
         if self.phase != Phase.EVALUATION:
@@ -89,7 +92,7 @@ class Client:
         y, pi = server.get_verifydata()
         d = H_D(mkt.root, Parameters.bits)
         g = H_QF(mkt.root, d, Parameters.bits)
-        if not vdf_verify(g, y, pi, Parameters.T):
+        if not vdf_verify(Parameters.bits, g, y, pi, Parameters.T):
             return False
         randomness = sha256(qf_tobytes(y, Parameters.bits)).digest()
         if randomness != server.get_randomness():

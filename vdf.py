@@ -1,40 +1,40 @@
 from sage.all import BinaryQF, is_pseudoprime
-from hashlib import sha256
+from hashlib import sha256, shake_256
 import sys
+from typing import Generator
+
+
+def H_kgen(x: bytes, k: int) -> Generator[int, None, None]:
+    bl = (k + 7) // 8
+    M = 1 << k
+    while True:
+        t = shake_256(x).digest(bl)
+        r = int.from_bytes(t, "big")
+        r |= 1 << (k - 1)
+        yield r % M
+        # not really important
+        x = t
 
 
 def H_P(x: bytes, k: int) -> int:
     # hash `x` to a k-bit prime
-    while True:
-        t = sha256(x).digest()
-        p = int.from_bytes(t, "big")
-        p |= 1 << (k - 1)
+    for p in H_kgen(x, k):
         p |= 1
         if is_pseudoprime(p):
             return p
-        # not really important
-        x = t
 
 
 def H_D(x: bytes, k: int) -> int:
     # hash `x` to a k-bit discriminant for imaginary quadratic fields
-    while True:
-        t = sha256(x).digest()
-        d = int.from_bytes(t, "big")
-        d |= 1 << (k - 1)
+    for d in H_kgen(x, k):
         d |= 7
         if is_pseudoprime(d):
             return -d
-        # not really important
-        x = t
 
 
 def H_QF(x: bytes, d: int, k: int) -> BinaryQF:
     # hash `x` to a k-bit quadratic form for imaginary quadratic fields
-    while True:
-        t = sha256(x).digest()
-        a = int.from_bytes(t, "big")
-        a |= 1 << (k - 1)
+    for a in H_kgen(x, k):
         a |= 3
         if is_pseudoprime(a):
             if pow(d, (a - 1) // 2, a) == 1:
@@ -43,8 +43,6 @@ def H_QF(x: bytes, d: int, k: int) -> BinaryQF:
                     b = a - b
                 c = (b * b - d) // (4 * a)
                 return BinaryQF(a, b, c)
-        # not really important
-        x = t
 
 
 def get_qf_principal_form(d: int) -> BinaryQF:
@@ -97,32 +95,33 @@ def compute(g: BinaryQF, l: int, T: int) -> BinaryQF:
     return x.reduced_form()
 
 
-def vdf_eval(g: BinaryQF, T: int):
+def vdf_eval(bits: int, g: BinaryQF, T: int):
     g = g.reduced_form()
     y = g
     for i in range(T):
         y = (y * y).reduced_form()
     y = y.reduced_form()
-    l = H_P(qf_tobytes(g, 256) + qf_tobytes(y, 256), 256)
+    l = H_P(qf_tobytes(g, bits) + qf_tobytes(y, bits), bits)
     pi = compute(g, l, T)
     return y, pi
 
 
-def vdf_verify(g: BinaryQF, y: BinaryQF, pi: BinaryQF, T: int):
+def vdf_verify(bits: int, g: BinaryQF, y: BinaryQF, pi: BinaryQF, T: int):
     g = g.reduced_form()
     y = y.reduced_form()
-    l = H_P(qf_tobytes(g, 256) + qf_tobytes(y, 256), 256)
+    l = H_P(qf_tobytes(g, bits) + qf_tobytes(y, bits), bits)
     r = pow(2, T, l)
     lhs = qf_pow(pi, l) * qf_pow(g, r)
     return lhs.reduced_form() == y
 
 
 if __name__ == "__main__":
-    x = bytes.fromhex(sys.argv[1])
-    T = int(sys.argv[2])
+    bits = int(sys.argv[1])
+    x = bytes.fromhex(sys.argv[2])
+    T = int(sys.argv[3])
 
-    d = H_D(x, 256)
-    g = H_QF(x, d, 256)
-    y, pi = vdf_eval(g, T)
-    sys.stdout.buffer.write(qf_tobytes(y, 256))
-    sys.stdout.buffer.write(qf_tobytes(pi, 256))
+    d = H_D(x, bits)
+    g = H_QF(x, d, bits)
+    y, pi = vdf_eval(bits, g, T)
+    sys.stdout.buffer.write(qf_tobytes(y, bits))
+    sys.stdout.buffer.write(qf_tobytes(pi, bits))

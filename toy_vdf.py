@@ -1,8 +1,9 @@
 from bqf import BinaryQF
 import gmpy2
 from hashlib import sha256, shake_256
-import sys
 from typing import Generator
+from dataclasses import dataclass
+from abstract import AbstractVDF
 
 
 def H_kgen(x: bytes, k: int) -> Generator[int, None, None]:
@@ -112,14 +113,48 @@ def vdf_verify(bits: int, g: BinaryQF, y: BinaryQF, pi: BinaryQF, T: int):
     return lhs.reduced_form() == y
 
 
-if __name__ == "__main__":
-    bits = int(sys.argv[1])
-    x = bytes.fromhex(sys.argv[2])
-    T = int(sys.argv[3])
+@dataclass
+class ToyProof:
+    d: int
+    g: BinaryQF
+    y: BinaryQF
+    pi: BinaryQF
 
-    d = H_D(x, bits)
-    g = H_QF(x, d, bits)
-    y, pi = vdf_eval(bits, g, T)
-    assert vdf_verify(bits, g, y, pi, T)
-    sys.stdout.buffer.write(qf_tobytes(y, bits))
-    sys.stdout.buffer.write(qf_tobytes(pi, bits))
+
+class ToyVDF(AbstractVDF):
+    def __init__(self, bits: int, T: int):
+        self.bits = bits
+        self.T = T
+
+    def prove(self, challenge: bytes) -> ToyProof:
+        d = H_D(challenge, self.bits)
+        g = H_QF(challenge, d, self.bits)
+        y, pi = vdf_eval(self.bits, g, self.T)
+        return ToyProof(d, g, y, pi)
+
+    def verify(self, challenge: bytes, proof: ToyProof) -> bool:
+        d = H_D(challenge, self.bits)
+        g = H_QF(challenge, d, self.bits)
+        return vdf_verify(self.bits, g, proof.y, proof.pi, self.T)
+
+    def extract_y(self, proof: ToyProof) -> bytes:
+        return qf_tobytes(proof.y, self.bits)
+
+
+if __name__ == "__main__":
+    vdf = ToyVDF(256, 1 << 10)
+    challenge = b"peko"
+    proof = vdf.prove(challenge)
+    print(proof)
+    print(vdf.verify(challenge, proof))
+
+    # bits = int(sys.argv[1])
+    # x = bytes.fromhex(sys.argv[2])
+    # T = int(sys.argv[3])
+
+    # d = H_D(x, bits)
+    # g = H_QF(x, d, bits)
+    # y, pi = vdf_eval(bits, g, T)
+    # assert vdf_verify(bits, g, y, pi, T)
+    # sys.stdout.buffer.write(qf_tobytes(y, bits))
+    # sys.stdout.buffer.write(qf_tobytes(pi, bits))

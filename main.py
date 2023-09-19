@@ -1,10 +1,12 @@
 from merkle_tree import MerkleTree
-from vdf import H_D, H_QF, qf_tobytes, qf_frombytes, vdf_eval, vdf_verify
+from abstract import AbstractVDF
+from toy_vdf import ToyVDF
+from chia_vdf import ChiaVDF
 from hashlib import sha256
 from enum import Enum
 from threading import Thread
 from subprocess import check_output
-import sys, os, random, vdf
+import sys, os, random
 
 # This implements https://www.ndss-symposium.org/wp-content/uploads/2022-234-paper.pdf special case L=1
 
@@ -17,31 +19,26 @@ class Phase(Enum):
 class Parameters:
     T = 2**16
     bits = 256
+    # vdf = ToyVDF(bits, T)
+    vdf = ChiaVDF(bits, T)
 
 
 class VDFComputation:
-    def __init__(self, bits, x, T):
-        self.bits = bits
-        self.x = x
-        self.T = T
+    def __init__(self, vdf: AbstractVDF, challenge: bytes):
+        self.vdf = vdf
+        self.challenge = challenge
         self.done = False
         self.thread = Thread(target=self.run)
         self.thread.start()
 
     def run(self):
-        # pari doesn't play nice with threads :(
-        out = check_output(
-            [sys.executable, vdf.__file__, str(self.bits), self.x.hex(), str(self.T)]
-        )
-        ln = (Parameters.bits // 8) * 3
-        self.y = qf_frombytes(out[:ln], Parameters.bits)
-        self.pi = qf_frombytes(out[ln:], Parameters.bits)
+        self.proof = self.vdf.prove(self.challenge)
         self.done = True
 
     def get(self):
         if not self.done:
             self.thread.join()
-        return self.y, self.pi
+        return self.proof
 
 
 class Server:
@@ -60,26 +57,26 @@ class Server:
             raise ValueError("not in contribution phase")
         self.phase = Phase.EVALUATION
         self.mkt = MerkleTree.from_data(sha256, self.data)
-        self.vdf = VDFComputation(Parameters.bits, self.mkt.root, Parameters.T)
+        self.vdf = VDFComputation(Parameters.vdf, self.mkt.root)
 
     def get_root(self):
         if self.phase != Phase.EVALUATION:
             raise ValueError("not in evaluation phase")
         return self.mkt.root
 
-    def get_proof(self, data_index: int):
+    def get_merkle_proof(self, data_index: int):
         if self.phase != Phase.EVALUATION:
             raise ValueError("not in evaluation phase")
         return self.mkt.get_proof(data_index)
 
-    def get_verifydata(self):
+    def get_proof(self):
         if self.phase != Phase.EVALUATION:
             raise ValueError("not in evaluation phase")
         return self.vdf.get()
 
     def get_randomness(self):
-        y, pi = self.get_verifydata()
-        return sha256(qf_tobytes(y, Parameters.bits)).digest()
+        proof = self.get_proof()
+        return sha256(Parameters.vdf.extract_y(proof)).digest()
 
 
 class Client:
@@ -92,15 +89,13 @@ class Client:
 
     def verify(self, server: Server):
         root = server.get_root()
-        proof = server.get_proof(self.index)
+        proof = server.get_merkle_proof(self.index)
         if not MerkleTree.check_proof(sha256, root, self.randomness, self.index, proof):
             return False
-        y, pi = server.get_verifydata()
-        d = H_D(root, Parameters.bits)
-        g = H_QF(root, d, Parameters.bits)
-        if not vdf_verify(Parameters.bits, g, y, pi, Parameters.T):
+        proof = server.get_proof()
+        if not Parameters.vdf.verify(root, proof):
             return False
-        randomness = sha256(qf_tobytes(y, Parameters.bits)).digest()
+        randomness = sha256(Parameters.vdf.extract_y(proof)).digest()
         if randomness != server.get_randomness():
             return False
         return True

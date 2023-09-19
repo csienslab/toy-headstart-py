@@ -48,7 +48,6 @@ class BinaryQF:
         s = a // w
         t = α // w
         u = g // w
-        h * u + s * c
         µ, ν = solve_linmod(t * u, h * u + s * c, s * t)
         λ = solve_linmod(t * ν, h - t * µ, s)[0]
         k = µ + ν * λ
@@ -90,9 +89,11 @@ class BinaryQF:
 if __name__ == "__main__":
     x = BinaryQF(12, 23, 34)
     print(x.reduced_form())
+    print((x * x).reduced_form())
     print((x * x * x).reduced_form())
 
     from sage.all import BinaryQF as SageBinaryQF
     x = SageBinaryQF(12, 23, 34)
     print(x.reduced_form())
+    print((x * x).reduced_form())
     print((x * x * x).reduced_form())

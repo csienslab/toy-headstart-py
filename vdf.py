@@ -58,11 +58,11 @@ def qf_pow(x: BinaryQF, n: int) -> BinaryQF:
     r = get_qf_principal_form(x.discriminant())
     while n > 0:
         if n & 1:
-            r *= x
+            r = (r * x).reduced_form()
         x *= x
         n >>= 1
         x = x.reduced_form()
-    return r.reduced_form()
+    return r
 
 
 def qf_tobytes(x: BinaryQF, b: int) -> bytes:
@@ -92,8 +92,8 @@ def compute(g: BinaryQF, l: int, T: int) -> BinaryQF:
     for _ in range(T):
         b = 2 * r // l
         r = 2 * r % l
-        x = qf_pow(x, 2) * qf_pow(g, b)
-    return x.reduced_form()
+        x = (x * x * qf_pow(g, b)).reduced_form()
+    return x
 
 
 def vdf_eval(bits: int, g: BinaryQF, T: int):

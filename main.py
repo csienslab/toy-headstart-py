@@ -15,7 +15,7 @@ class Phase(Enum):
 
 
 class Parameters:
-    T = 2**14
+    T = 2**16
     bits = 256
 
 

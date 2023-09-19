@@ -1,4 +1,5 @@
-from sage.all import BinaryQF, is_pseudoprime
+from bqf import BinaryQF
+import gmpy2
 from hashlib import sha256, shake_256
 import sys
 from typing import Generator
@@ -20,7 +21,7 @@ def H_P(x: bytes, k: int) -> int:
     # hash `x` to a k-bit prime
     for p in H_kgen(x, k):
         p |= 1
-        if is_pseudoprime(p):
+        if gmpy2.is_prime(p):
             return p
 
 
@@ -28,7 +29,7 @@ def H_D(x: bytes, k: int) -> int:
     # hash `x` to a k-bit discriminant for imaginary quadratic fields
     for d in H_kgen(x, k):
         d |= 7
-        if is_pseudoprime(d):
+        if gmpy2.is_prime(d):
             return -d
 
 
@@ -36,7 +37,7 @@ def H_QF(x: bytes, d: int, k: int) -> BinaryQF:
     # hash `x` to a k-bit quadratic form for imaginary quadratic fields
     for a in H_kgen(x, k):
         a |= 3
-        if is_pseudoprime(a):
+        if gmpy2.is_prime(a):
             if pow(d, (a - 1) // 2, a) == 1:
                 b = pow(d, (a + 1) // 4, a)
                 if b % 2 != 1:

@@ -62,10 +62,15 @@ class Server:
         self.mkt = MerkleTree.from_data(sha256, self.data)
         self.vdf = VDFComputation(Parameters.bits, self.mkt.root, Parameters.T)
 
-    def get_tree(self):
+    def get_root(self):
         if self.phase != Phase.EVALUATION:
             raise ValueError("not in evaluation phase")
-        return self.mkt.tree
+        return self.mkt.root
+
+    def get_proof(self, data_index: int):
+        if self.phase != Phase.EVALUATION:
+            raise ValueError("not in evaluation phase")
+        return self.mkt.get_proof(data_index)
 
     def get_verifydata(self):
         if self.phase != Phase.EVALUATION:
@@ -86,12 +91,13 @@ class Client:
         self.index = server.contribute(self.randomness)
 
     def verify(self, server: Server):
-        mkt = MerkleTree(sha256, server.get_tree())
-        if not mkt.check_present(self.index, self.randomness):
+        root = server.get_root()
+        proof = server.get_proof(self.index)
+        if not MerkleTree.check_proof(sha256, root, self.randomness, self.index, proof):
             return False
         y, pi = server.get_verifydata()
-        d = H_D(mkt.root, Parameters.bits)
-        g = H_QF(mkt.root, d, Parameters.bits)
+        d = H_D(root, Parameters.bits)
+        g = H_QF(root, d, Parameters.bits)
         if not vdf_verify(Parameters.bits, g, y, pi, Parameters.T):
             return False
         randomness = sha256(qf_tobytes(y, Parameters.bits)).digest()

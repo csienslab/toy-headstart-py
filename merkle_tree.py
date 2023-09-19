@@ -36,6 +36,31 @@ class MerkleTree:
             cur = (cur - 1) // 2
         return x == self.root
 
+    def get_proof(self, index: int) -> list[tuple[str, bytes]]:
+        cur = index + self.lendata - 1
+        ret = []
+        while cur > 0:
+            if cur & 1:
+                ret.append(("R", self.tree[cur + 1]))
+            else:
+                ret.append(("L", self.tree[cur - 1]))
+            cur = (cur - 1) // 2
+        return ret
+
+    @staticmethod
+    def check_proof(
+        H, root: bytes, x: bytes, index: int, proof: list[tuple[str, bytes]]
+    ):
+        x = H(x).digest()
+        for side, h in proof:
+            if side == "R":
+                x = H(x + h).digest()
+            elif side == "L":
+                x = H(h + x).digest()
+            else:
+                raise ValueError("invalid proof")
+        return x == root
+
     @staticmethod
     def compute_tree(H, data: list[bytes]):
         l = len(data)
@@ -68,3 +93,5 @@ if __name__ == "__main__":
     mkt2 = MerkleTree(sha256, mkt.tree)
     for i, x in enumerate(data):
         assert mkt2.check_present(i, x)
+        proof = mkt2.get_proof(i)
+        assert MerkleTree.check_proof(sha256, mkt2.root, x, i, proof)

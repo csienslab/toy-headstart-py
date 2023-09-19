@@ -68,18 +68,14 @@ def qf_pow(x: BinaryQF, n: int) -> BinaryQF:
 def qf_tobytes(x: BinaryQF, b: int) -> bytes:
     r = b""
     for v in x:
-        r += b"\x00" if v >= 0 else b"\x01"
-        r += abs(int(v)).to_bytes(b // 8, "big")
+        r += int(v).to_bytes(b // 8, "big", signed=True)
     return r
 
 
 def qf_frombytes(x: bytes, b: int) -> BinaryQF:
     r = []
-    for i in range(0, len(x), b // 8 + 1):
-        is_negative = x[i]
-        v = int.from_bytes(x[i + 1 : i + 1 + b // 8], "big")
-        if is_negative == 1:
-            v = -v
+    for i in range(0, len(x), b // 8):
+        v = int.from_bytes(x[i : i + b // 8], "big", signed=True)
         r.append(v)
     return BinaryQF(*r)
 
@@ -124,5 +120,6 @@ if __name__ == "__main__":
     d = H_D(x, bits)
     g = H_QF(x, d, bits)
     y, pi = vdf_eval(bits, g, T)
+    assert vdf_verify(bits, g, y, pi, T)
     sys.stdout.buffer.write(qf_tobytes(y, bits))
     sys.stdout.buffer.write(qf_tobytes(pi, bits))

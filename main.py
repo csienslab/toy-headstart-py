@@ -33,7 +33,7 @@ class VDFComputation:
         out = check_output(
             [sys.executable, vdf.__file__, str(self.bits), self.x.hex(), str(self.T)]
         )
-        ln = (Parameters.bits // 8 + 1) * 3
+        ln = (Parameters.bits // 8) * 3
         self.y = qf_frombytes(out[:ln], Parameters.bits)
         self.pi = qf_frombytes(out[ln:], Parameters.bits)
         self.done = True

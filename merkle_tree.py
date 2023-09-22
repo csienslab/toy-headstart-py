@@ -1,9 +1,19 @@
 from hashlib import sha256
 
+class MerkleHash:
+    # https://crypto.stackexchange.com/questions/2106/what-is-the-purpose-of-using-different-hash-functions-for-the-leaves-and-interna
+    def __init__(self, hashfn):
+        self.hashfn = hashfn
+
+    def hash_leaf(self, x: bytes) -> bytes:
+        return self.hashfn(b"\x00" + x).digest()
+    
+    def hash_node(self, x: bytes, y: bytes) -> bytes:
+        return self.hashfn(b"\x01" + x + y).digest()
 
 class MerkleTree:
     def __init__(
-        self, H, tree: list[bytes], data: list[bytes] = None, *, verify_data=True
+        self, H: MerkleHash, tree: list[bytes], data: list[bytes] = None, *, verify_data=True
     ):
         self.H = H
         self.tree = tree
@@ -26,13 +36,13 @@ class MerkleTree:
             raise ValueError("invalid tree")
 
     def check_present(self, index: int, x: bytes):
-        x = self.H(x).digest()
+        x = self.H.hash_leaf(x)
         cur = index + self.lendata - 1
         while cur > 0:
             if cur & 1:  # left
-                x = self.H(x + self.tree[cur + 1]).digest()
+                x = self.H.hash_node(x, self.tree[cur + 1])
             else:  # right
-                x = self.H(self.tree[cur - 1] + x).digest()
+                x = self.H.hash_node(self.tree[cur - 1], x)
             cur = (cur - 1) // 2
         return x == self.root
 
@@ -49,32 +59,32 @@ class MerkleTree:
 
     @staticmethod
     def check_proof(
-        H, root: bytes, x: bytes, index: int, proof: list[tuple[str, bytes]]
+        H: MerkleHash, root: bytes, x: bytes, index: int, proof: list[tuple[str, bytes]]
     ):
-        x = H(x).digest()
+        x = H.hash_leaf(x)
         for side, h in proof:
             if side == "R":
-                x = H(x + h).digest()
+                x = H.hash_node(x, h)
             elif side == "L":
-                x = H(h + x).digest()
+                x = H.hash_node(h, x)
             else:
                 raise ValueError("invalid proof")
         return x == root
 
     @staticmethod
-    def compute_tree(H, data: list[bytes]):
+    def compute_tree(H: MerkleHash, data: list[bytes]):
         l = len(data)
         if l & (l - 1) != 0:
             raise ValueError("data length must be a power of 2")
         tree = [None] * (2 * len(data) - 1)
         for i in range(len(data)):
-            tree[i + len(data) - 1] = H(data[i]).digest()
+            tree[i + len(data) - 1] = H.hash_leaf(data[i])
         for i in range(len(data) - 2, -1, -1):
-            tree[i] = H(tree[i * 2 + 1] + tree[i * 2 + 2]).digest()
+            tree[i] = H.hash_node(tree[i * 2 + 1], tree[i * 2 + 2])
         return tree
 
     @staticmethod
-    def from_data(H, data: list[bytes]):
+    def from_data(H: MerkleHash, data: list[bytes]):
         data = list(data)
         l = len(data)
         if l & (l - 1) != 0:
@@ -89,9 +99,10 @@ if __name__ == "__main__":
         return n.to_bytes((n.bit_length() + 7) // 8, "big")
 
     data = [int2bytes(i) for i in [1, 2, 3, 4, 5]]
-    mkt = MerkleTree.from_data(sha256, data)
-    mkt2 = MerkleTree(sha256, mkt.tree)
+    H = MerkleHash(sha256)
+    mkt = MerkleTree.from_data(H, data)
+    mkt2 = MerkleTree(H, mkt.tree)
     for i, x in enumerate(data):
         assert mkt2.check_present(i, x)
         proof = mkt2.get_proof(i)
-        assert MerkleTree.check_proof(sha256, mkt2.root, x, i, proof)
+        assert MerkleTree.check_proof(H, mkt2.root, x, i, proof)

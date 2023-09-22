@@ -1,4 +1,4 @@
-from merkle_tree import MerkleTree
+from merkle_tree import MerkleTree, MerkleHash
 from abstract import AbstractVDF
 from toy_vdf import ToyVDF
 from chia_vdf import ChiaVDF
@@ -17,6 +17,7 @@ class Phase(Enum):
 
 
 class Parameters:
+    hash = MerkleHash(sha256)
     T = 2**16
     bits = 256
     # vdf = ToyVDF(bits, T)
@@ -56,7 +57,7 @@ class Server:
         if self.phase != Phase.CONTRIBUTION:
             raise ValueError("not in contribution phase")
         self.phase = Phase.EVALUATION
-        self.mkt = MerkleTree.from_data(sha256, self.data)
+        self.mkt = MerkleTree.from_data(Parameters.hash, self.data)
         self.vdf = VDFComputation(Parameters.vdf, self.mkt.root)
 
     def get_root(self):
@@ -90,7 +91,7 @@ class Client:
     def verify(self, server: Server):
         root = server.get_root()
         proof = server.get_merkle_proof(self.index)
-        if not MerkleTree.check_proof(sha256, root, self.randomness, self.index, proof):
+        if not MerkleTree.check_proof(Parameters.hash, root, self.randomness, self.index, proof):
             return False
         proof = server.get_proof()
         if not Parameters.vdf.verify(root, proof):

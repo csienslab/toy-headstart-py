@@ -24,10 +24,10 @@ for accumulator in accumulators:
     print(timeit.timeit(lambda: test_accumulator(accumulator, 1 << bits), number=number) / number)
 
 """
-Testing <merkle_tree.MerkleTreeAccumulator object at 0x7f7e06260950> with 2^12 parties
-0.012250411801505833
-Testing <rsa_accumulator.RSAAccumulator object at 0x7f7e06265250> with 2^12 parties
-6.078687308396911
+Testing <merkle_tree.MerkleTreeAccumulator object at 0x7f00985e8450> with 2^12 parties
+0.011843588802730665
+Testing <rsa_accumulator.RSAAccumulator object at 0x7f00985f5250> with 2^12 parties
+0.6084546802041586
 Testing <bqf_accumulator.BQFAccumulator object at 0x7f7e062659d0> with 2^12 parties
-15.13127411819878
+14.917274859402095
 """

@@ -1,27 +1,28 @@
 from Crypto.Util.number import getPrime, bytes_to_long, long_to_bytes
+import gmpy2
 from abstract import AbstractAccumulator
 
 
 class RSAAccumulator(AbstractAccumulator[int, int, int]):
     def __init__(self, n: int, g: int):
-        self.n = n
-        self.g = g
+        self.n = gmpy2.mpz(n)
+        self.g = gmpy2.mpz(g)
 
     def accumulate(self, X: list[bytes]) -> int:
         r = self.g
         for x in X:
-            r = pow(r, bytes_to_long(x), self.n)
-        return r
+            r = gmpy2.powmod(r, bytes_to_long(x), self.n)
+        return int(r)
 
     def witgen(self, acc: int, X: list[bytes], index: int) -> int:
         r = self.g
         for i, x in enumerate(X):
             if i != index:
-                r = pow(r, bytes_to_long(x), self.n)
-        return r
+                r = gmpy2.powmod(r, bytes_to_long(x), self.n)
+        return int(r)
 
     def verify(self, acc: int, w: int, x: bytes) -> bool:
-        return pow(w, bytes_to_long(x), self.n) == acc
+        return gmpy2.powmod(w, bytes_to_long(x), self.n) == acc
 
     def get_accval(self, acc: int) -> int:
         return acc

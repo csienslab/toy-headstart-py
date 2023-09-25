@@ -24,6 +24,7 @@ def H_P(x: bytes, k: int) -> int:
         p |= 1
         if gmpy2.is_prime(p):
             return p
+    raise RuntimeError("unreachable")
 
 
 def H_D(x: bytes, k: int) -> int:
@@ -32,6 +33,7 @@ def H_D(x: bytes, k: int) -> int:
         d |= 7
         if gmpy2.is_prime(d):
             return -d
+    raise RuntimeError("unreachable")
 
 
 def H_QF(x: bytes, d: int, k: int) -> BinaryQF:
@@ -45,6 +47,7 @@ def H_QF(x: bytes, d: int, k: int) -> BinaryQF:
                     b = a - b
                 c = (b * b - d) // (4 * a)
                 return BinaryQF(a, b, c)
+    raise RuntimeError("unreachable")
 
 
 def get_qf_principal_form(d: int) -> BinaryQF:

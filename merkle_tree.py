@@ -1,5 +1,6 @@
 from hashlib import sha256
 from abstract import AbstractAccumulator
+from typing import Optional
 
 
 class MerkleHash:
@@ -19,7 +20,7 @@ class MerkleTree:
         self,
         H: MerkleHash,
         tree: list[bytes],
-        data: list[bytes] = None,
+        data: Optional[list[bytes]] = None,
         *,
         verify_data=True
     ):
@@ -84,7 +85,7 @@ class MerkleTree:
         l = len(data)
         if l & (l - 1) != 0:
             raise ValueError("data length must be a power of 2")
-        tree = [None] * (2 * len(data) - 1)
+        tree = [b""] * (2 * len(data) - 1)
         for i in range(len(data)):
             tree[i + len(data) - 1] = H.hash_leaf(data[i])
         for i in range(len(data) - 2, -1, -1):
@@ -117,10 +118,10 @@ class MerkleTreeAccumulator(
     def verify(self, root: bytes, w: list[tuple[str, bytes]], x: bytes):
         return MerkleTree.check_proof(self.H, root, x, 0, w)
 
-    def get_accval(self, mkt: MerkleTree):
+    def get_accval(self, mkt: MerkleTree) -> bytes:
         return mkt.root
 
-    def get_bytes(self, root: bytes):
+    def get_bytes(self, root: bytes) -> bytes:
         return root
 
 

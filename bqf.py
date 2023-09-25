@@ -23,7 +23,7 @@ class BinaryQF:
 
     def __repr__(self):
         return f"{self.a}x^2 + {self.b}xy + {self.c}y^2"
-    
+
     def __eq__(self, other):
         return self.a == other.a and self.b == other.b and self.c == other.c
 
@@ -57,13 +57,13 @@ class BinaryQF:
         B = j * u - (k * t + l * s)
         C = k * l - j * m
         return BinaryQF(A, B, C)
-    
+
     def square(self):
         a, b, c = self.a, self.b, self.c
         mu = solve_linmod(b, c, a)[0]
-        A = a ** 2
+        A = a**2
         B = b - 2 * a * mu
-        C = mu ** 2 - (b * mu - c) // a
+        C = mu**2 - (b * mu - c) // a
         return BinaryQF(A, B, C)
 
     def normalize(self):
@@ -93,6 +93,7 @@ if __name__ == "__main__":
     print((x * x * x).reduced_form())
 
     from sage.all import BinaryQF as SageBinaryQF
+
     x = SageBinaryQF(12, 23, 34)
     print(x.reduced_form())
     print((x * x).reduced_form())

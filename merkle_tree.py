@@ -1,4 +1,6 @@
 from hashlib import sha256
+from abstract import AbstractAccumulator
+
 
 class MerkleHash:
     # https://crypto.stackexchange.com/questions/2106/what-is-the-purpose-of-using-different-hash-functions-for-the-leaves-and-interna
@@ -7,13 +9,19 @@ class MerkleHash:
 
     def hash_leaf(self, x: bytes) -> bytes:
         return self.hashfn(b"\x00" + x).digest()
-    
+
     def hash_node(self, x: bytes, y: bytes) -> bytes:
         return self.hashfn(b"\x01" + x + y).digest()
 
+
 class MerkleTree:
     def __init__(
-        self, H: MerkleHash, tree: list[bytes], data: list[bytes] = None, *, verify_data=True
+        self,
+        H: MerkleHash,
+        tree: list[bytes],
+        data: list[bytes] = None,
+        *,
+        verify_data=True
     ):
         self.H = H
         self.tree = tree
@@ -93,6 +101,29 @@ class MerkleTree:
         return MerkleTree(H, tree, data)
 
 
+class MerkleTreeAccumulator(
+    AbstractAccumulator[MerkleTree, bytes, list[tuple[str, bytes]]]
+):
+    def __init__(self, H: MerkleHash):
+        self.H = H
+
+    def accumulate(self, X: list[bytes]) -> MerkleTree:
+        mkt = MerkleTree.from_data(self.H, X)
+        return mkt
+
+    def witgen(self, mkt: MerkleTree, X: list[bytes], index: int):
+        return mkt.get_proof(index)
+
+    def verify(self, root: bytes, w: list[tuple[str, bytes]], x: bytes):
+        return MerkleTree.check_proof(self.H, root, x, 0, w)
+
+    def get_accval(self, mkt: MerkleTree):
+        return mkt.root
+
+    def get_bytes(self, root: bytes):
+        return root
+
+
 if __name__ == "__main__":
 
     def int2bytes(n):
@@ -106,3 +137,11 @@ if __name__ == "__main__":
         assert mkt2.check_present(i, x)
         proof = mkt2.get_proof(i)
         assert MerkleTree.check_proof(H, mkt2.root, x, i, proof)
+
+    acc = MerkleTreeAccumulator(H)
+    X = [b"peko", b"peko2", b"peko3"]
+    accm = acc.accumulate(X)
+    w = acc.witgen(accm, X, 1)
+    accval = acc.get_accval(accm)
+    assert acc.verify(accval, w, X[1])
+    print(acc.get_bytes(accval))

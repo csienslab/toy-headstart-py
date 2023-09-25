@@ -86,6 +86,40 @@ class BinaryQF:
         return BinaryQF(a, b, c)
 
 
+def get_qf_principal_form(d: int) -> BinaryQF:
+    # get the principal form of discriminant `d`
+    # aka identity element
+    # from https://github.com/Chia-Network/vdf-competition/blob/main/classgroups.pdf Definition 5.4
+    k = d % 2
+    return BinaryQF(1, k, (k**2 - d) // 4)
+
+
+def qf_pow(x: BinaryQF, n: int) -> BinaryQF:
+    r = get_qf_principal_form(x.discriminant())
+    while n > 0:
+        if n & 1:
+            r = (r * x).reduced_form()
+        x *= x
+        n >>= 1
+        x = x.reduced_form()
+    return r
+
+
+def qf_tobytes(x: BinaryQF, b: int) -> bytes:
+    r = b""
+    for v in x:
+        r += int(v).to_bytes(b // 8, "big", signed=True)
+    return r
+
+
+def qf_frombytes(x: bytes, b: int) -> BinaryQF:
+    r = []
+    for i in range(0, len(x), b // 8):
+        v = int.from_bytes(x[i : i + b // 8], "big", signed=True)
+        r.append(v)
+    return BinaryQF(*r)
+
+
 if __name__ == "__main__":
     x = BinaryQF(12, 23, 34)
     print(x.reduced_form())

@@ -1,4 +1,5 @@
-from merkle_tree import MerkleTree, MerkleHash
+from merkle_tree import MerkleHash, MerkleTreeAccumulator
+from rsa_accumulator import RSAAccumulator
 from abstract import AbstractVDF
 from toy_vdf import ToyVDF
 from chia_vdf import ChiaVDF
@@ -17,7 +18,8 @@ class Phase(Enum):
 
 
 class Parameters:
-    hash = MerkleHash(sha256)
+    # accumulator = RSAAccumulator.generate(1024)
+    accumulator = MerkleTreeAccumulator(MerkleHash(sha256))
     T = 2**16
     bits = 256
     # vdf = ToyVDF(bits, T)
@@ -57,18 +59,20 @@ class Server:
         if self.phase != Phase.CONTRIBUTION:
             raise ValueError("not in contribution phase")
         self.phase = Phase.EVALUATION
-        self.mkt = MerkleTree.from_data(Parameters.hash, self.data)
-        self.vdf = VDFComputation(Parameters.vdf, self.mkt.root)
+        self.acc = Parameters.accumulator.accumulate(self.data)
+        self.vdf = VDFComputation(
+            Parameters.vdf, Parameters.accumulator.get_bytes(self.get_accval())
+        )
 
-    def get_root(self):
+    def get_accval(self):
         if self.phase != Phase.EVALUATION:
             raise ValueError("not in evaluation phase")
-        return self.mkt.root
+        return Parameters.accumulator.get_accval(self.acc)
 
-    def get_merkle_proof(self, data_index: int):
+    def get_acc_proof(self, data_index: int):
         if self.phase != Phase.EVALUATION:
             raise ValueError("not in evaluation phase")
-        return self.mkt.get_proof(data_index)
+        return Parameters.accumulator.witgen(self.acc, self.data, data_index)
 
     def get_proof(self):
         if self.phase != Phase.EVALUATION:
@@ -89,12 +93,12 @@ class Client:
         self.index = server.contribute(self.randomness)
 
     def verify(self, server: Server):
-        root = server.get_root()
-        proof = server.get_merkle_proof(self.index)
-        if not MerkleTree.check_proof(Parameters.hash, root, self.randomness, self.index, proof):
+        accval = server.get_accval()
+        proof = server.get_acc_proof(self.index)
+        if not Parameters.accumulator.verify(accval, proof, self.randomness):
             return False
         proof = server.get_proof()
-        if not Parameters.vdf.verify(root, proof):
+        if not Parameters.vdf.verify(accval, proof):
             return False
         randomness = sha256(Parameters.vdf.extract_y(proof)).digest()
         if randomness != server.get_randomness():

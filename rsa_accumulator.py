@@ -1,5 +1,6 @@
 from Crypto.Util.number import getPrime, bytes_to_long, long_to_bytes
-import gmpy2
+import gmpy2, math
+from utils import H_P
 from abstract import AbstractAccumulator
 
 
@@ -11,18 +12,28 @@ class RSAAccumulator(AbstractAccumulator[int, int, int]):
     def accumulate(self, X: list[bytes]) -> int:
         r = self.g
         for x in X:
-            r = gmpy2.powmod(r, bytes_to_long(x), self.n)
+            r = gmpy2.powmod(r, H_P(x, 256), self.n)
         return int(r)
 
     def witgen(self, acc: int, X: list[bytes], index: int) -> int:
         r = self.g
         for i, x in enumerate(X):
             if i != index:
-                r = gmpy2.powmod(r, bytes_to_long(x), self.n)
+                r = gmpy2.powmod(r, H_P(x, 256), self.n)
         return int(r)
 
     def verify(self, acc: int, w: int, x: bytes) -> bool:
-        return gmpy2.powmod(w, bytes_to_long(x), self.n) == acc
+        return gmpy2.powmod(w, H_P(x, 256), self.n) == acc
+    
+    def nonmemwitgen(self, acc: int, X: list[bytes], x: bytes) -> tuple[int, int]:
+        s = math.prod(H_P(x, 256) for x in X)
+        _, a, b = gmpy2.gcdext(s, H_P(x, 256))
+        B = gmpy2.powmod(self.g, b, self.n)
+        return a, B
+    
+    def nonmemverify(self, acc: int, w: tuple[int, int], x: bytes) -> bool:
+        a, B = w
+        return gmpy2.powmod(acc, a, self.n) * gmpy2.powmod(B, H_P(x, 256), self.n) % self.n == self.g
 
     def get_accval(self, acc: int) -> int:
         return acc
@@ -49,3 +60,8 @@ if __name__ == "__main__":
     accval = acc.get_accval(accm)
     assert acc.verify(accval, w, X[1])
     print(acc.get_bytes(accval))
+
+    w = acc.nonmemwitgen(accm, X, b"peko4")
+    assert acc.nonmemverify(accval, w, b"peko4")
+    w = acc.nonmemwitgen(accm, X, X[0])
+    assert not acc.nonmemverify(accval, w, X[0])

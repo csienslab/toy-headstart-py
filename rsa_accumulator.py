@@ -1,10 +1,10 @@
 from Crypto.Util.number import getPrime, bytes_to_long, long_to_bytes
 import gmpy2, math
 from utils import H_P
-from abstract import AbstractAccumulator
+from abstract import AbstractUniversalAccumulator
 
 
-class RSAAccumulator(AbstractAccumulator[int, int, int]):
+class RSAAccumulator(AbstractUniversalAccumulator[int, int, int, tuple[int, int]]):
     def __init__(self, n: int, g: int):
         self.n = gmpy2.mpz(n)
         self.g = gmpy2.mpz(g)

@@ -126,17 +126,25 @@ class MerkleTreeAccumulator(
     def get_bytes(self, root: bytes) -> bytes:
         return root
 
+
 SortedMerkleTreeAccumulatorT = tuple[MerkleTree, list[int]]
 SortedMerkleTreeAccumulationValue = bytes
 SortedMerkleTreeWitness = list[tuple[str, bytes]]
+
 
 @dataclass
 class SortedMerkleTreeNonMemWitness:
     left: Optional[tuple[int, bytes, list[tuple[str, bytes]]]]
     right: Optional[tuple[int, bytes, list[tuple[str, bytes]]]]
 
+
 class SortedMerkleTreeAccumulator(
-    AbstractUniversalAccumulator[SortedMerkleTreeAccumulatorT, SortedMerkleTreeAccumulationValue, SortedMerkleTreeWitness, SortedMerkleTreeNonMemWitness]
+    AbstractUniversalAccumulator[
+        SortedMerkleTreeAccumulatorT,
+        SortedMerkleTreeAccumulationValue,
+        SortedMerkleTreeWitness,
+        SortedMerkleTreeNonMemWitness,
+    ]
 ):
     def __init__(self, H: MerkleHash):
         self.H = H
@@ -150,31 +158,67 @@ class SortedMerkleTreeAccumulator(
             index_map[idx] = i
         return mkt, index_map
 
-    def witgen(self, acc: SortedMerkleTreeAccumulatorT, X: list[bytes], index: int) -> SortedMerkleTreeWitness:
+    def witgen(
+        self, acc: SortedMerkleTreeAccumulatorT, X: list[bytes], index: int
+    ) -> SortedMerkleTreeWitness:
         mkt, index_map = acc
         return mkt.get_proof(index_map[index])
 
     def verify(self, root: bytes, w: list[tuple[str, bytes]], x: bytes) -> bool:
         return MerkleTree.check_proof(self.H, root, x, 0, w)
 
-    def nonmemwitgen(self, acc: SortedMerkleTreeAccumulatorT, X: list[bytes], x: bytes) -> SortedMerkleTreeNonMemWitness:
+    def nonmemwitgen(
+        self, acc: SortedMerkleTreeAccumulatorT, X: list[bytes], x: bytes
+    ) -> SortedMerkleTreeNonMemWitness:
         if x in X:
             raise ValueError("x is already in X")
         mkt, index_map = acc
         assert mkt.data is not None
         index = bisect.bisect_left(mkt.data, x)  # index of sorted X
         # now X[index] > x
-        left = (index - 1, mkt.data[index - 1], mkt.get_proof(index - 1)) if index > 0 else None
-        right = (index, mkt.data[index], mkt.get_proof(index)) if index < len(mkt.data) else None
+        left = (
+            (index - 1, mkt.data[index - 1], mkt.get_proof(index - 1))
+            if index > 0
+            else None
+        )
+        right = (
+            (index, mkt.data[index], mkt.get_proof(index))
+            if index < len(mkt.data)
+            else None
+        )
         return SortedMerkleTreeNonMemWitness(left, right)
 
-    def nonmemverify(self, root: bytes, w: SortedMerkleTreeNonMemWitness, x: bytes) -> bool:
-        leftProved = MerkleTree.check_proof(self.H, root, w.left[1], w.left[0], w.left[2]) if w.left else True
-        rightProved = MerkleTree.check_proof(self.H, root, w.right[1], w.right[0], w.right[2]) if w.right else True
-        li = int(''.join([str(int(side == "L")) for side, _ in w.left[2]])[::-1], 2) if w.left else -1
-        ri = int(''.join([str(int(side == "L")) for side, _ in w.right[2]])[::-1], 2) if w.right else -1
-        goodIndex = (li + 1 == ri) or (ri == 0 and li == -1) or (li + 1 == 2 ** len(w.left[2]) and ri == -1)
-        indexMatched = (li == w.left[0] if w.left else True) and (ri == w.right[0] if w.right else True)
+    def nonmemverify(
+        self, root: bytes, w: SortedMerkleTreeNonMemWitness, x: bytes
+    ) -> bool:
+        leftProved = (
+            MerkleTree.check_proof(self.H, root, w.left[1], w.left[0], w.left[2])
+            if w.left
+            else True
+        )
+        rightProved = (
+            MerkleTree.check_proof(self.H, root, w.right[1], w.right[0], w.right[2])
+            if w.right
+            else True
+        )
+        li = (
+            int("".join([str(int(side == "L")) for side, _ in w.left[2]])[::-1], 2)
+            if w.left
+            else -1
+        )
+        ri = (
+            int("".join([str(int(side == "L")) for side, _ in w.right[2]])[::-1], 2)
+            if w.right
+            else -1
+        )
+        goodIndex = (
+            (li + 1 == ri)
+            or (ri == 0 and li == -1)
+            or (li + 1 == 2 ** len(w.left[2]) and ri == -1)
+        )
+        indexMatched = (li == w.left[0] if w.left else True) and (
+            ri == w.right[0] if w.right else True
+        )
         return leftProved and rightProved and goodIndex and indexMatched
 
     def get_accval(self, acc: SortedMerkleTreeAccumulatorT) -> bytes:
@@ -183,6 +227,7 @@ class SortedMerkleTreeAccumulator(
 
     def get_bytes(self, root: bytes) -> bytes:
         return root
+
 
 if __name__ == "__main__":
 

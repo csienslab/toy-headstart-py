@@ -16,7 +16,6 @@ def H_D(x: bytes, k: int) -> int:
     raise RuntimeError("unreachable")
 
 
-
 def H_QF(x: bytes, d: int, k: int) -> BinaryQF:
     # hash `x` to a k-bit quadratic form for imaginary quadratic fields
     for a in H_kgen(x, k):
@@ -27,7 +26,7 @@ def H_QF(x: bytes, d: int, k: int) -> BinaryQF:
                 if b % 2 != 1:
                     b = a - b
                 c = (b * b - d) // (4 * a)
-                return BinaryQF(a, b, c)
+                return BinaryQF(a, b, c).reduced_form()
     raise RuntimeError("unreachable")
 
 

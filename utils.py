@@ -2,6 +2,7 @@ import gmpy2
 from hashlib import shake_256
 from typing import Generator
 
+
 def H_kgen(x: bytes, k: int) -> Generator[int, None, None]:
     bl = (k + 7) // 8
     M = 1 << k

@@ -7,6 +7,7 @@ from Crypto.Util.number import (
 )
 from bqf import BinaryQF, qf_pow, qf_tobytes
 from abstract import AbstractAccumulator
+import chiavdf
 
 
 class BQFAccumulator(AbstractAccumulator[BinaryQF, BinaryQF, BinaryQF]):
@@ -36,8 +37,8 @@ class BQFAccumulator(AbstractAccumulator[BinaryQF, BinaryQF, BinaryQF]):
     def get_bytes(self, acc: BinaryQF) -> bytes:
         return qf_tobytes(acc, self.d.bit_length())
 
-    @staticmethod
-    def generate(bits):
+    @classmethod
+    def generate(cls, bits):
         while True:
             p = getPrime(bits)
             if p % 4 == 3:
@@ -53,14 +54,45 @@ class BQFAccumulator(AbstractAccumulator[BinaryQF, BinaryQF, BinaryQF]):
                         b = a - b
                     c = (b * b - d) // (4 * a)
                     g = BinaryQF(a, b, c)
-                    return BQFAccumulator(g)
+                    return cls(g)
+
+
+def int2bytes(x):
+    return int(x).to_bytes((x.bit_length() + 7) // 8, "big")
+
+
+def bytes2int(x):
+    return int.from_bytes(x, "big")
+
+
+def chai_exp(g: BinaryQF, exps: list[bytes]):
+    a, b, c = map(
+        bytes2int, chiavdf.exp(int2bytes(g.a), int2bytes(g.b), int2bytes(g.c), exps)
+    )
+    return BinaryQF(a, b, c)
+
+
+class ChiaBQFAccumulator(BQFAccumulator):
+    def accumulate(self, X: list[bytes]) -> BinaryQF:
+        return chai_exp(self.g, X)
+
+    def witgen(self, acc: BinaryQF, X: list[bytes], index: int) -> BinaryQF:
+        return chai_exp(self.g, X[:index] + X[index + 1 :])
+
+    def verify(self, acc: BinaryQF, w: BinaryQF, x: bytes) -> bool:
+        return chai_exp(w, [x]) == acc
 
 
 if __name__ == "__main__":
-    acc = BQFAccumulator.generate(1024)
-    X = [b"peko", b"peko2", b"peko3"]
-    accm = acc.accumulate(X)
-    w = acc.witgen(accm, X, 1)
-    accval = acc.get_accval(accm)
-    assert acc.verify(accval, w, X[1])
-    print(acc.get_bytes(accval))
+
+    def test(acc):
+        X = [b"peko", b"peko2", b"peko3"]
+        accm = acc.accumulate(X)
+        w = acc.witgen(accm, X, 1)
+        accval = acc.get_accval(accm)
+        assert acc.verify(accval, w, X[1])
+        print(acc.get_bytes(accval).hex())
+
+    g = BQFAccumulator.generate(1024).g
+    test(BQFAccumulator(g))
+    test(ChiaBQFAccumulator(g))

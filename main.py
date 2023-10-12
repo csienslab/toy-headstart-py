@@ -1,5 +1,5 @@
 from merkle_tree import MerkleHash, MerkleTreeAccumulator, SortedMerkleTreeAccumulator
-from rsa_accumulator import RSAAccumulator
+from rsa_accumulator import RSAAccumulator, RSAPrimeAccumulator
 from bqf_accumulator import BQFAccumulator, ChiaBQFAccumulator
 from abstract import AbstractVDF
 from toy_vdf import ToyVDF
@@ -20,6 +20,7 @@ class Phase(Enum):
 
 class Parameters:
     # accumulator = RSAAccumulator.generate(1024)
+    # accumulator = RSAPrimeAccumulator.generate(1024)
     # accumulator = BQFAccumulator.generate(1024)
     accumulator = ChiaBQFAccumulator.generate(1024)
     # accumulator = MerkleTreeAccumulator(MerkleHash(sha256))

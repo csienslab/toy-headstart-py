@@ -1,4 +1,4 @@
-from merkle_tree import MerkleHash, MerkleTreeAccumulator
+from merkle_tree import MerkleHash, MerkleTreeAccumulator, SortedMerkleTreeAccumulator
 from rsa_accumulator import RSAAccumulator
 from bqf_accumulator import BQFAccumulator
 from abstract import AbstractVDF
@@ -21,7 +21,8 @@ class Phase(Enum):
 class Parameters:
     # accumulator = RSAAccumulator.generate(1024)
     # accumulator = BQFAccumulator.generate(1024)
-    accumulator = MerkleTreeAccumulator(MerkleHash(sha256))
+    # accumulator = MerkleTreeAccumulator(MerkleHash(sha256))
+    accumulator = SortedMerkleTreeAccumulator(MerkleHash(sha256))
     T = 2**16
     bits = 256
     # vdf = ToyVDF(bits, T)

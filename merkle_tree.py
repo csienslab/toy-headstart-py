@@ -1,6 +1,8 @@
 from hashlib import sha256
-from abstract import AbstractAccumulator
+from abstract import AbstractAccumulator, AbstractUniversalAccumulator
 from typing import Optional
+from dataclasses import dataclass
+import bisect
 
 
 class MerkleHash:
@@ -124,6 +126,63 @@ class MerkleTreeAccumulator(
     def get_bytes(self, root: bytes) -> bytes:
         return root
 
+SortedMerkleTreeAccumulatorT = tuple[MerkleTree, list[int]]
+SortedMerkleTreeAccumulationValue = bytes
+SortedMerkleTreeWitness = list[tuple[str, bytes]]
+
+@dataclass
+class SortedMerkleTreeNonMemWitness:
+    left: Optional[tuple[int, bytes, list[tuple[str, bytes]]]]
+    right: Optional[tuple[int, bytes, list[tuple[str, bytes]]]]
+
+class SortedMerkleTreeAccumulator(
+    AbstractUniversalAccumulator[SortedMerkleTreeAccumulatorT, SortedMerkleTreeAccumulationValue, SortedMerkleTreeWitness, SortedMerkleTreeNonMemWitness]
+):
+    def __init__(self, H: MerkleHash):
+        self.H = H
+
+    def accumulate(self, X: list[bytes]) -> SortedMerkleTreeAccumulatorT:
+        sort_idx = sorted(range(len(X)), key=X.__getitem__)
+        X = [X[i] for i in sort_idx]
+        mkt = MerkleTree.from_data(self.H, X)
+        index_map = [0] * len(X)
+        for i, idx in enumerate(sort_idx):
+            index_map[idx] = i
+        return mkt, index_map
+
+    def witgen(self, acc: SortedMerkleTreeAccumulatorT, X: list[bytes], index: int) -> SortedMerkleTreeWitness:
+        mkt, index_map = acc
+        return mkt.get_proof(index_map[index])
+
+    def verify(self, root: bytes, w: list[tuple[str, bytes]], x: bytes) -> bool:
+        return MerkleTree.check_proof(self.H, root, x, 0, w)
+
+    def nonmemwitgen(self, acc: SortedMerkleTreeAccumulatorT, X: list[bytes], x: bytes) -> SortedMerkleTreeNonMemWitness:
+        if x in X:
+            raise ValueError("x is already in X")
+        mkt, index_map = acc
+        assert mkt.data is not None
+        index = bisect.bisect_left(mkt.data, x)  # index of sorted X
+        # now X[index] > x
+        left = (index - 1, mkt.data[index - 1], mkt.get_proof(index - 1)) if index > 0 else None
+        right = (index, mkt.data[index], mkt.get_proof(index)) if index < len(mkt.data) else None
+        return SortedMerkleTreeNonMemWitness(left, right)
+
+    def nonmemverify(self, root: bytes, w: SortedMerkleTreeNonMemWitness, x: bytes) -> bool:
+        leftProved = MerkleTree.check_proof(self.H, root, w.left[1], w.left[0], w.left[2]) if w.left else True
+        rightProved = MerkleTree.check_proof(self.H, root, w.right[1], w.right[0], w.right[2]) if w.right else True
+        li = int(''.join([str(int(side == "L")) for side, _ in w.left[2]])[::-1], 2) if w.left else -1
+        ri = int(''.join([str(int(side == "L")) for side, _ in w.right[2]])[::-1], 2) if w.right else -1
+        goodIndex = (li + 1 == ri) or (ri == 0 and li == -1) or (li + 1 == 2 ** len(w.left[2]) and ri == -1)
+        indexMatched = (li == w.left[0] if w.left else True) and (ri == w.right[0] if w.right else True)
+        return leftProved and rightProved and goodIndex and indexMatched
+
+    def get_accval(self, acc: SortedMerkleTreeAccumulatorT) -> bytes:
+        mkt, _ = acc
+        return mkt.root
+
+    def get_bytes(self, root: bytes) -> bytes:
+        return root
 
 if __name__ == "__main__":
 
@@ -139,10 +198,31 @@ if __name__ == "__main__":
         proof = mkt2.get_proof(i)
         assert MerkleTree.check_proof(H, mkt2.root, x, i, proof)
 
-    acc = MerkleTreeAccumulator(H)
-    X = [b"peko", b"peko2", b"peko3"]
-    accm = acc.accumulate(X)
-    w = acc.witgen(accm, X, 1)
-    accval = acc.get_accval(accm)
-    assert acc.verify(accval, w, X[1])
-    print(acc.get_bytes(accval))
+    def test1():
+        acc = MerkleTreeAccumulator(H)
+        X = [b"peko", b"peko2", b"peko3"]
+        accm = acc.accumulate(X)
+        accval = acc.get_accval(accm)
+        print(acc.get_bytes(accval))
+        for i, x in enumerate(X):
+            w = acc.witgen(accm, X, i)
+            assert acc.verify(accval, w, X[i])
+
+    def test2():
+        acc = SortedMerkleTreeAccumulator(H)
+        X = [b"5", b"2", b"3", b"1"]
+        accm = acc.accumulate(X)
+        accval = acc.get_accval(accm)
+        for i, x in enumerate(X):
+            w = acc.witgen(accm, X, i)
+            assert acc.verify(accval, w, X[i])
+
+        w1 = acc.nonmemwitgen(accm, X, b"0")
+        assert acc.nonmemverify(accval, w1, b"0")
+        w2 = acc.nonmemwitgen(accm, X, b"4")
+        assert acc.nonmemverify(accval, w2, b"4")
+        w3 = acc.nonmemwitgen(accm, X, b"6")
+        assert acc.nonmemverify(accval, w3, b"6")
+
+    test1()
+    test2()

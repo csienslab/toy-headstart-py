@@ -53,3 +53,24 @@ class AbstractAccumulator(
     @abstractmethod
     def get_bytes(self, accval: AccumulationValueT) -> bytes:
         pass
+
+
+NonMemWitnessT = TypeVar("NonMemWitnessT")
+
+
+class AbstractUniversalAccumulator(
+    AbstractAccumulator,
+    Generic[AccumulatorT, AccumulationValueT, WitnessT, NonMemWitnessT],
+    metaclass=ABCMeta,
+):
+    @abstractmethod
+    def nonmemwitgen(
+        self, acc: AccumulatorT, X: list[bytes], x: bytes
+    ) -> NonMemWitnessT:
+        pass
+
+    @abstractmethod
+    def nonmemverify(
+        self, accval: AccumulationValueT, w: NonMemWitnessT, x: bytes
+    ) -> bool:
+        pass

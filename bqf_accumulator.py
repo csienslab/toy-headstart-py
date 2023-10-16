@@ -14,6 +14,7 @@ class BQFAccumulator(AbstractAccumulator[BinaryQF, BinaryQF, BinaryQF]):
     def __init__(self, g: BinaryQF):
         self.d = g.discriminant()
         self.g = g
+        self.witness_cache = {}
 
     def accumulate(self, X: list[bytes]) -> BinaryQF:
         r = self.g
@@ -21,12 +22,29 @@ class BQFAccumulator(AbstractAccumulator[BinaryQF, BinaryQF, BinaryQF]):
             r = qf_pow(r, bytes_to_long(x))
         return r
 
+    def batch_witgen(self, X: list[bytes]) -> list[int]:
+        def root_factor(g, X):
+            if len(X) == 1:
+                return [g]
+            h = len(X) // 2
+            gl = g
+            for x in X[:h]:
+                gl = qf_pow(gl, bytes_to_long(x))
+            gr = g
+            for x in X[h:]:
+                gr = qf_pow(gr, bytes_to_long(x))
+            L = root_factor(gr, X[:h])
+            R = root_factor(gl, X[h:])
+            return L + R
+
+        return root_factor(self.g, X)
+
     def witgen(self, acc: BinaryQF, X: list[bytes], index: int) -> BinaryQF:
-        r = self.g
-        for i, x in enumerate(X):
-            if i != index:
-                r = qf_pow(r, bytes_to_long(x))
-        return r
+        cache_key = hash(tuple(X))
+        if cache_key not in self.witness_cache:
+            self.witness_cache[cache_key] = self.batch_witgen(X)
+        witness_cache = self.witness_cache[cache_key]
+        return witness_cache[index]
 
     def verify(self, acc: BinaryQF, w: BinaryQF, x: bytes) -> bool:
         return qf_pow(w, bytes_to_long(x)) == acc
@@ -76,8 +94,21 @@ class ChiaBQFAccumulator(BQFAccumulator):
     def accumulate(self, X: list[bytes]) -> BinaryQF:
         return chai_exp(self.g, X)
 
-    def witgen(self, acc: BinaryQF, X: list[bytes], index: int) -> BinaryQF:
-        return chai_exp(self.g, X[:index] + X[index + 1 :])
+    def batch_witgen(self, X: list[bytes]) -> list[int]:
+        def root_factor(g, X):
+            if len(X) == 1:
+                return [g]
+            h = len(X) // 2
+            gl = chai_exp(g, X[:h])
+            gr = chai_exp(g, X[h:])
+            L = root_factor(gr, X[:h])
+            R = root_factor(gl, X[h:])
+            return L + R
+
+        return root_factor(self.g, X)
+
+    # def witgen(self, acc: BinaryQF, X: list[bytes], index: int) -> BinaryQF:
+    #     return chai_exp(self.g, X[:index] + X[index + 1 :])
 
     def verify(self, acc: BinaryQF, w: BinaryQF, x: bytes) -> bool:
         return chai_exp(w, [x]) == acc

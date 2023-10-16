@@ -8,6 +8,7 @@ class RSAAccumulator(AbstractAccumulator[int, int, int]):
     def __init__(self, n: int, g: int):
         self.n = gmpy2.mpz(n)
         self.g = gmpy2.mpz(g)
+        self.witness_cache = {}
 
     def bytes_to_long(self, x):
         return int.from_bytes(x, "big")
@@ -18,12 +19,29 @@ class RSAAccumulator(AbstractAccumulator[int, int, int]):
             r = gmpy2.powmod(r, self.bytes_to_long(x), self.n)
         return int(r)
 
+    def batch_witgen(self, X: list[bytes]) -> list[int]:
+        def root_factor(g, X):
+            if len(X) == 1:
+                return [g]
+            h = len(X) // 2
+            gl = g
+            for x in X[:h]:
+                gl = gmpy2.powmod(gl, self.bytes_to_long(x), self.n)
+            gr = g
+            for x in X[h:]:
+                gr = gmpy2.powmod(gr, self.bytes_to_long(x), self.n)
+            L = root_factor(gr, X[:h])
+            R = root_factor(gl, X[h:])
+            return L + R
+
+        return root_factor(self.g, X)
+
     def witgen(self, acc: int, X: list[bytes], index: int) -> int:
-        r = self.g
-        for i, x in enumerate(X):
-            if i != index:
-                r = gmpy2.powmod(r, self.bytes_to_long(x), self.n)
-        return int(r)
+        cache_key = hash(tuple(X))
+        if cache_key not in self.witness_cache:
+            self.witness_cache[cache_key] = self.batch_witgen(X)
+        witness_cache = self.witness_cache[cache_key]
+        return witness_cache[index]
 
     def verify(self, acc: int, w: int, x: bytes) -> bool:
         return gmpy2.powmod(w, self.bytes_to_long(x), self.n) == acc
@@ -75,6 +93,10 @@ if __name__ == "__main__":
     accval = acc.get_accval(accm)
     assert acc.verify(accval, w, X[1])
     print(acc.get_bytes(accval))
+
+    ww = acc.batch_witgen(X)
+    for x, w in zip(X, ww):
+        assert acc.verify(accval, w, x)
 
     acc2 = RSAPrimeAccumulator.generate(1024)
     X = [b"peko", b"peko2", b"peko3"]

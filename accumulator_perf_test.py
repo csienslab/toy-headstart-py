@@ -53,3 +53,19 @@ Testing <bqf_accumulator.ChiaBQFAccumulator object at 0x7f89f0c13b90> with 2^10 
 Testing <bqf_accumulator.BQFAccumulator object at 0x7f89f0c13b10> with 2^10 parties
 133.76148696666738
 """
+
+"""
+Using divide-and-conquer for batch_witgen:
+Testing <merkle_tree.MerkleTreeAccumulator object at 0x7f28ffdabd90> with 2^10 parties
+0.00418894433338816
+Testing <rsa_accumulator.RSAAccumulator object at 0x7f2900a16e10> with 2^10 parties
+1.6433237556678553
+Testing <rsa_accumulator.RSAPrimeAccumulator object at 0x7f2900a16dd0> with 2^10 parties
+8.093596516332278
+Testing <bqf_accumulator.ChiaBQFAccumulator object at 0x7f28ffdbfbd0> with 2^10 parties
+5.468420221004635
+Testing <bqf_accumulator.ChiaBQFAccumulator object at 0x7f28ffdbff10> with 2^10 parties
+15.106426291992344
+Testing <bqf_accumulator.BQFAccumulator object at 0x7f28ffdbff90> with 2^10 parties
+44.874894668668276
+"""

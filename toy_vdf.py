@@ -30,7 +30,7 @@ def H_QF(x: bytes, d: int, k: int) -> BinaryQF:
     raise RuntimeError("unreachable")
 
 
-def compute(g: BinaryQF, l: int, T: int) -> BinaryQF:
+def compute_proof(g: BinaryQF, l: int, T: int) -> BinaryQF:
     # compute g^floor(2^T // l)
     # https://eprint.iacr.org/2018/623.pdf section 4.1 algorithm 4
     x = get_qf_principal_form(g.discriminant())
@@ -47,9 +47,17 @@ def vdf_eval(bits: int, g: BinaryQF, T: int):
     y = g
     for i in range(T):
         y = (y * y).reduced_form()
-    y = y.reduced_form()
+    return y.reduced_form()
+
+
+def vdf_prove(bits: int, g: BinaryQF, T: int, y: BinaryQF):
     l = H_P(qf_tobytes(g, bits) + qf_tobytes(y, bits), bits)
-    pi = compute(g, l, T)
+    return compute_proof(g, l, T)
+
+
+def vdf_eval_and_prove(bits: int, g: BinaryQF, T: int):
+    y = vdf_eval(bits, g, T)
+    pi = vdf_prove(bits, g, T, y)
     return y, pi
 
 
@@ -78,7 +86,7 @@ class ToyVDF(AbstractVDF):
     def prove(self, challenge: bytes) -> ToyProof:
         d = H_D(challenge, self.bits)
         g = H_QF(challenge, d, self.bits)
-        y, pi = vdf_eval(self.bits, g, self.T)
+        y, pi = vdf_eval_and_prove(self.bits, g, self.T)
         return ToyProof(d, g, y, pi)
 
     def verify(self, challenge: bytes, proof: ToyProof) -> bool:
@@ -90,12 +98,66 @@ class ToyVDF(AbstractVDF):
         return qf_tobytes(proof.y, self.bits)
 
 
+class AggregateVDF:
+    AGGREGATION_DISCRIMINANT_SEED = b"totally non-backdoored seed"  # should be constant
+
+    def __init__(self, bits: int, T: int):
+        self.bits = bits
+        self.T = T
+        self.d = H_D(self.AGGREGATION_DISCRIMINANT_SEED, 256)
+
+    def eval_one(self, challenge: bytes) -> BinaryQF:
+        g = H_QF(challenge, self.d, self.bits)
+        return vdf_eval(self.bits, g, self.T)
+
+    def eval(self, challenges: list[bytes]) -> list[BinaryQF]:
+        return [self.eval_one(challenge) for challenge in challenges]
+
+    def compute_parameters(self, challenges: list[bytes], ys: list[BinaryQF]):
+        gs = [H_QF(challenge, self.d, self.bits) for challenge in challenges]
+        s = sha256(
+            b"".join(qf_tobytes(g, self.bits) for g in gs)
+            + b"".join(qf_tobytes(y, self.bits) for y in ys)
+        ).digest()
+        a = [
+            next(H_kgen(str(j).encode() + s, self.bits))
+            for j in range(1, len(challenges) + 1)
+        ]
+        l = H_P(s, self.bits)
+        G = get_qf_principal_form(self.d)
+        for a_j, g_j in zip(a, gs):
+            G = (G * qf_pow(g_j, a_j)).reduced_form()
+        return gs, a, l, G
+
+    def aggregate(self, challenges: list[bytes], ys: list[BinaryQF]) -> BinaryQF:
+        gs, a, l, G = self.compute_parameters(challenges, ys)
+        pi = compute_proof(G, l, self.T)
+        return pi
+
+    def verify(
+        self, challenges: list[bytes], ys: list[BinaryQF], pi: BinaryQF
+    ) -> BinaryQF:
+        gs, a, l, G = self.compute_parameters(challenges, ys)
+        Y = get_qf_principal_form(self.d)
+        for a_j, y_j in zip(a, ys):
+            Y = (Y * qf_pow(y_j, a_j)).reduced_form()
+        r = pow(2, self.T, l)
+        lhs = qf_pow(pi, l) * qf_pow(G, r)
+        return lhs.reduced_form() == Y
+
+
 if __name__ == "__main__":
     vdf = ToyVDF(256, 1 << 10)
     challenge = b"peko"
     proof = vdf.prove(challenge)
     print(proof)
     print(vdf.verify(challenge, proof))
+
+    avdf = AggregateVDF(256, 1 << 10)
+    challenge = [b"peko", b"peko2", b"peko3"]
+    ys = avdf.eval(challenge)
+    pi = avdf.aggregate(challenge, ys)
+    print(avdf.verify(challenge, ys, pi))
 
     # bits = int(sys.argv[1])
     # x = bytes.fromhex(sys.argv[2])

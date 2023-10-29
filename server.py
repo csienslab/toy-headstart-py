@@ -1,8 +1,8 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, make_response
 from werkzeug.exceptions import HTTPException
 from flask.json.provider import JSONProvider
 from apscheduler.schedulers.background import BackgroundScheduler
-import atexit, logging, base64, json
+import atexit, logging, base64, json, msgpack
 from stage import Stage, Phase
 
 
@@ -10,7 +10,7 @@ class RandomnessBeacon:
     def __init__(self, logger: logging.Logger):
         self.logger = logger
         self.stages: list[Stage] = [Stage()]
-        self.interval_seconds = 10
+        self.interval_seconds = 5
 
     @property
     def current_stage(self):
@@ -57,24 +57,14 @@ class RandomnessBeacon:
         self.scheduler = scheduler
 
 
-class Base64Encoder(json.JSONEncoder):
-    def default(self, o):
-        if isinstance(o, bytes):
-            return base64.b64encode(o).decode()
-        return json.JSONEncoder.default(self, o)
-
-
-class CustomJSONProvider(JSONProvider):
-    def dumps(self, obj, **kwargs):
-        return json.dumps(obj, cls=Base64Encoder, **kwargs)
-
-    def loads(self, s, **kwargs):
-        return json.loads(s, **kwargs)
+def msgpackify(obj):
+    resp = make_response(msgpack.packb(obj))
+    resp.headers["Content-Type"] = "application/msgpack"
+    return resp
 
 
 app = Flask(__name__)
 app.logger.setLevel(logging.INFO)
-app.json = CustomJSONProvider(app)
 
 
 @app.errorhandler(HTTPException)
@@ -103,6 +93,7 @@ def info():
     return jsonify(
         {
             "stage": beacon.current_stage_index,
+            "phase": beacon.current_stage.phase.name,
             "contributions": len(beacon.current_stage.data),
         }
     )
@@ -128,6 +119,7 @@ def stage(stage_idx):
     stage = beacon.get_stage(stage_idx)
     return jsonify(
         {
+            "stage": stage_idx,
             "phase": stage.phase.name,
             "contributions": len(stage.data),
         }
@@ -137,22 +129,22 @@ def stage(stage_idx):
 @app.get("/api/stage/<int:stage_idx>/accval")
 def accval(stage_idx):
     stage = beacon.get_stage_after_phase(stage_idx, Phase.EVALUATION)
-    return jsonify({"value": stage.get_acc_val()})
+    return msgpackify(stage.get_acc_val())
 
 
 @app.get("/api/stage/<int:stage_idx>/accproof/<int:data_idx>")
 def accproof(stage_idx, data_idx):
     stage = beacon.get_stage_after_phase(stage_idx, Phase.EVALUATION)
-    return jsonify({"value": stage.get_acc_proof(data_idx)})
+    return msgpackify(stage.get_acc_proof(data_idx))
 
 
 @app.get("/api/stage/<int:stage_idx>/vdfproof")
 def vdfproof(stage_idx):
     stage = beacon.get_stage_after_phase(stage_idx, Phase.DONE)
-    return jsonify({"value": stage.get_vdf_proof()})
+    return msgpackify(stage.get_vdf_proof())
 
 
 @app.get("/api/stage/<int:stage_idx>/randomness")
 def randomness(stage_idx):
     stage = beacon.get_stage_after_phase(stage_idx, Phase.DONE)
-    return jsonify({"value": stage.get_final_randomness()})
+    return msgpackify(stage.get_final_randomness())

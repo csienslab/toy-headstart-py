@@ -70,20 +70,24 @@ class Stage:
         self.phase = Phase.DONE
 
     def get_acc_val(self):
-        if self.phase != Phase.EVALUATION:
+        if self.phase < Phase.EVALUATION:
             raise ValueError("not in evaluation phase")
         return Parameters.accumulator.get_accval(self.acc)
 
     def get_acc_proof(self, data_index: int):
-        if self.phase != Phase.EVALUATION:
+        if self.phase < Phase.EVALUATION:
             raise ValueError("not in evaluation phase")
         return Parameters.accumulator.witgen(self.acc, self.data, data_index)
 
     def get_vdf_proof(self):
-        if self.phase != Phase.DONE:
+        if self.phase < Phase.DONE:
             raise ValueError("not in done phase")
         return self.vdf.get()
 
     def get_final_randomness(self):
         proof = self.get_vdf_proof()
-        return sha256(Parameters.vdf.extract_y(proof)).digest()
+        return self.hash_y_to_randomness(Parameters.vdf.extract_y(proof))
+
+    @staticmethod
+    def hash_y_to_randomness(y: bytes):
+        return sha256(y).digest()

@@ -1,9 +1,6 @@
-from merkle_tree import MerkleHash, MerkleTreeAccumulator, SortedMerkleTreeAccumulator
-from rsa_accumulator import RSAAccumulator, RSAPrimeAccumulator
-from bqf_accumulator import BQFAccumulator, ChiaBQFAccumulator
+from merkle_tree import MerkleHash, MerkleTreeAccumulator
 from abstract import AbstractVDF
-from toy_vdf import ToyVDF
-from chia_vdf import ChiaVDF
+from chia_vdf import SerializableChiaVDF
 from hashlib import sha256
 from enum import Enum
 from threading import Thread, Lock
@@ -22,16 +19,10 @@ class Phase(Enum):
 
 
 class Parameters:
-    # accumulator = RSAAccumulator.generate(1024)
-    # accumulator = RSAPrimeAccumulator.generate(1024)
-    # accumulator = BQFAccumulator.generate(1024)
-    # accumulator = ChiaBQFAccumulator.generate(1024)
     accumulator = MerkleTreeAccumulator(MerkleHash(sha256))
-    # accumulator = SortedMerkleTreeAccumulator(MerkleHash(sha256))
     T = 2**16
     bits = 256
-    # vdf = ToyVDF(bits, T)
-    vdf = ChiaVDF(bits, T)
+    vdf = SerializableChiaVDF(bits, T)
 
 
 class VDFComputation:

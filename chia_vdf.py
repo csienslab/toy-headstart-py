@@ -1,6 +1,7 @@
 from chiavdf import create_discriminant, prove, verify_wesolowski
 from dataclasses import dataclass
 from abstract import AbstractVDF
+import msgpack
 
 
 @dataclass
@@ -37,9 +38,25 @@ class ChiaVDF(AbstractVDF):
         return proof.result_y
 
 
+class SerializableChiaVDF(ChiaVDF):
+    def prove(self, challenge: bytes) -> bytes:
+        proof = super().prove(challenge)
+        return msgpack.packb((proof.discriminant_str, proof.result_y, proof.proof))
+
+    def verify(self, challenge: bytes, proof: bytes) -> bool:
+        d, y, pi = msgpack.unpackb(proof)
+        return super().verify(challenge, ChiaProof(d, y, pi))
+
+    def extract_y(self, proof: bytes) -> bytes:
+        d, y, pi = msgpack.unpackb(proof)
+        return y
+
+
 if __name__ == "__main__":
-    vdf = ChiaVDF(256, 1 << 10)
-    challenge = b"peko"
-    proof = vdf.prove(challenge)
-    print(proof)
-    print(vdf.verify(challenge, proof))
+    for cls in [ChiaVDF, SerializableChiaVDF]:
+        vdf = cls(256, 1 << 10)
+        challenge = b"peko"
+        proof = vdf.prove(challenge)
+        print(proof)
+        print(vdf.verify(challenge, proof))
+        print(vdf.extract_y(proof))

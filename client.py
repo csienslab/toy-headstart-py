@@ -1,6 +1,7 @@
 from stage import Parameters, Phase, Stage
 from dataclasses import dataclass
-import httpx, base64, msgpack, time
+import httpx, base64, msgpack, time, public_key
+from cryptography.hazmat.primitives import serialization
 
 
 @dataclass
@@ -8,6 +9,7 @@ class Contribution:
     value: bytes
     stage: int
     data_index: int
+    signature: bytes
 
 
 @dataclass
@@ -23,23 +25,38 @@ class StageInfo:
 
 
 class HeadStartClient:
-    def __init__(self, client: httpx.Client):
+    @staticmethod
+    def from_server_url(url: str) -> "HeadStartClient":
+        client = httpx.Client(base_url=url)
+        pub_bytes = client.get("/api/pubkey").content
+        pub_key = serialization.load_pem_public_key(pub_bytes)
+        return HeadStartClient(client, pub_key)
+
+    def __init__(self, client: httpx.Client, pub_key: public_key.Ed25519PublicKey):
         self.client = client
+        self.pub_key = pub_key
 
     def get_info(self) -> StageInfo:
-        return StageInfo(**self.client.get("/api/info").json())
+        return StageInfo(**msgpack.unpackb(self.client.get("/api/info").content))
 
     def contribute(self, randomness: bytes) -> Contribution:
-        return Contribution(
+        ct = Contribution(
             value=randomness,
-            **self.client.post(
-                "/api/contribute",
-                json={"randomness": base64.b64encode(randomness).decode()},
-            ).json(),
+            **msgpack.unpackb(
+                self.client.post(
+                    "/api/contribute",
+                    json={"randomness": base64.b64encode(randomness).decode()},
+                ).content
+            ),
         )
+        if not public_key.verify(self.pub_key, ct.value, ct.signature):
+            raise ValueError("invalid signature")
+        return ct
 
     def get_stage(self, stage_idx: int) -> StageInfo:
-        return StageInfo(**self.client.get(f"/api/stage/{stage_idx}").json())
+        return StageInfo(
+            **msgpack.unpackb(self.client.get(f"/api/stage/{stage_idx}").content)
+        )
 
     def wait_for_phase(self, stage_idx: int, phase: Phase, polling_interval=1):
         while self.get_stage(stage_idx).phase < phase:
@@ -92,7 +109,7 @@ class HeadStartClient:
 
 
 if __name__ == "__main__":
-    client = HeadStartClient(httpx.Client(base_url="http://localhost:5000"))
+    client = HeadStartClient.from_server_url("http://localhost:5000")
     print(client.get_info())
     print(ct1 := client.contribute(b"peko"))
     print(ct2 := client.contribute(b"miko"))

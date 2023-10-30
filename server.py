@@ -1,16 +1,25 @@
-from flask import Flask, request, jsonify, make_response
+from flask import Flask, request, make_response
 from werkzeug.exceptions import HTTPException
 from flask.json.provider import JSONProvider
 from apscheduler.schedulers.background import BackgroundScheduler
 import atexit, logging, base64, json, msgpack
 from stage import Stage, Phase
+import public_key
+from cryptography.hazmat.primitives import serialization
+
+
+with open("priv.key", "rb") as f:
+    priv_key = serialization.load_pem_private_key(f.read(), password=None, backend=None)
+with open("pub.key", "rb") as f:
+    public_bytes = f.read()
 
 
 class RandomnessBeacon:
-    def __init__(self, logger: logging.Logger):
+    def __init__(self, logger: logging.Logger, priv_key: public_key.Ed25519PrivateKey):
         self.logger = logger
         self.stages: list[Stage] = [Stage()]
         self.interval_seconds = 5
+        self.priv_key = priv_key
 
     @property
     def current_stage(self):
@@ -38,7 +47,8 @@ class RandomnessBeacon:
         )
         data_idx = self.current_stage.contribute(x)
         stage_idx = self.current_stage_index
-        return stage_idx, data_idx
+        sig = public_key.sign(self.priv_key, x)
+        return stage_idx, data_idx, sig
 
     def next_stage(self):
         self.logger.info(
@@ -84,13 +94,20 @@ def handle_exception(e):
     return response
 
 
-beacon = RandomnessBeacon(app.logger)
+beacon = RandomnessBeacon(app.logger, priv_key)
 beacon.register_scheduler()
+
+
+@app.get("/api/pubkey")
+def pubkey():
+    resp = make_response(public_bytes)
+    resp.headers["Content-Type"] = "application/octet-stream"
+    return resp
 
 
 @app.get("/api/info")
 def info():
-    return jsonify(
+    return msgpackify(
         {
             "stage": beacon.current_stage_index,
             "phase": beacon.current_stage.phase.name,
@@ -105,19 +122,19 @@ def contribute():
         x = base64.b64decode(request.json["randomness"])
     except:
         return (
-            jsonify(
+            msgpackify(
                 {"error": "no randomness provided or randomness isn't base64 encoded"}
             ),
             400,
         )
-    stage_idx, data_idx = beacon.contribute(x)
-    return jsonify({"stage": stage_idx, "data_index": data_idx})
+    stage_idx, data_idx, sig = beacon.contribute(x)
+    return msgpackify({"stage": stage_idx, "data_index": data_idx, "signature": sig})
 
 
 @app.get("/api/stage/<int:stage_idx>")
 def stage(stage_idx):
     stage = beacon.get_stage(stage_idx)
-    return jsonify(
+    return msgpackify(
         {
             "stage": stage_idx,
             "phase": stage.phase.name,

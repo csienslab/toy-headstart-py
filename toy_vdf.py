@@ -3,7 +3,7 @@ import gmpy2
 from hashlib import sha256, shake_256
 from typing import Generator
 from dataclasses import dataclass
-from abstract import AbstractVDF
+from abstract import AbstractVDF, AggregateVDF
 from utils import H_kgen, H_P
 
 
@@ -98,7 +98,7 @@ class ToyVDF(AbstractVDF):
         return qf_tobytes(proof.y, self.bits)
 
 
-class AggregateVDF:
+class AggregateToyVDF(AggregateVDF):
     AGGREGATION_DISCRIMINANT_SEED = b"totally non-backdoored seed"  # should be constant
 
     def __init__(self, bits: int, T: int):
@@ -134,9 +134,7 @@ class AggregateVDF:
         pi = compute_proof(G, l, self.T)
         return pi
 
-    def verify(
-        self, challenges: list[bytes], ys: list[BinaryQF], pi: BinaryQF
-    ) -> BinaryQF:
+    def verify(self, challenges: list[bytes], ys: list[BinaryQF], pi: BinaryQF) -> bool:
         gs, a, l, G = self.compute_parameters(challenges, ys)
         Y = get_qf_principal_form(self.d)
         for a_j, y_j in zip(a, ys):
@@ -153,7 +151,7 @@ if __name__ == "__main__":
     print(proof)
     print(vdf.verify(challenge, proof))
 
-    avdf = AggregateVDF(256, 1 << 10)
+    avdf = AggregateToyVDF(256, 1 << 10)
     challenges = [b"peko", b"peko2", b"peko3"]
     ys = avdf.eval(challenges)
     pi = avdf.aggregate(challenges, ys)

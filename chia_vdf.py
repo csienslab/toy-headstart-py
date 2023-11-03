@@ -7,7 +7,7 @@ from chiavdf import (
     aggvdf_verify,
 )
 from dataclasses import dataclass
-from abstract import AbstractVDF
+from abstract import AbstractVDF, AggregateVDF
 import msgpack
 from toy_vdf import H_D
 
@@ -71,7 +71,7 @@ def bytes2int(x):
     return int.from_bytes(x, "big")
 
 
-class AggregateVDF:
+class AggregateChiaVDF(AggregateVDF):
     AGGREGATION_DISCRIMINANT_SEED = b"totally non-backdoored seed"  # should be constant
 
     def __init__(self, bits: int, T: int):
@@ -98,7 +98,7 @@ if __name__ == "__main__":
         print(vdf.verify(challenge, proof))
         print(vdf.extract_y(proof))
 
-    avdf = AggregateVDF(1024, 1 << 16)
+    avdf = AggregateChiaVDF(1024, 1 << 16)
     challenges = [b"peko", b"peko2", b"peko3"]
     ys = avdf.eval(challenges)
     pi = avdf.aggregate(challenges, ys)

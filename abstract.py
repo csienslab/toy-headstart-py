@@ -22,6 +22,24 @@ class AbstractVDF(Generic[EvalAndProofT], metaclass=ABCMeta):
         pass
 
 
+EvalT = TypeVar("EvalT")
+ProofT = TypeVar("ProofT")
+
+
+class AggregateVDF(Generic[EvalT, ProofT], metaclass=ABCMeta):
+    @abstractmethod
+    def eval(self, challenges: list[bytes]) -> list[EvalT]:
+        pass
+
+    @abstractmethod
+    def aggregate(self, challenges: list[bytes], ys: list[EvalT]) -> ProofT:
+        pass
+
+    @abstractmethod
+    def verify(self, challenges: list[bytes], ys: list[EvalT], proof: ProofT) -> bool:
+        pass
+
+
 AccumulatorT = TypeVar("AccumulatorT")
 AccumulationValueT = TypeVar("AccumulationValueT")
 WitnessT = TypeVar("WitnessT")

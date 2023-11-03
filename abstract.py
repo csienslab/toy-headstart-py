@@ -1,24 +1,24 @@
 from abc import ABCMeta, abstractmethod
 from typing import TypeVar, Generic
 
-ProofT = TypeVar("ProofT")
+EvalAndProofT = TypeVar("EvalAndProofT")
 
 
-class AbstractVDF(Generic[ProofT], metaclass=ABCMeta):
+class AbstractVDF(Generic[EvalAndProofT], metaclass=ABCMeta):
     @abstractmethod
     def __init__(self, bits: int, T: int):
         pass
 
     @abstractmethod
-    def prove(self, challenge: bytes) -> ProofT:
+    def eval_and_prove(self, challenge: bytes) -> EvalAndProofT:
         pass
 
     @abstractmethod
-    def verify(self, challenge: bytes, proof: ProofT) -> bool:
+    def verify(self, challenge: bytes, proof: EvalAndProofT) -> bool:
         pass
 
     @abstractmethod
-    def extract_y(self, proof: ProofT) -> bytes:
+    def extract_y(self, proof: EvalAndProofT) -> bytes:
         pass
 
 

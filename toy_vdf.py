@@ -83,7 +83,7 @@ class ToyVDF(AbstractVDF):
         self.bits = bits
         self.T = T
 
-    def prove(self, challenge: bytes) -> ToyProof:
+    def eval_and_prove(self, challenge: bytes) -> ToyProof:
         d = H_D(challenge, self.bits)
         g = H_QF(challenge, d, self.bits)
         y, pi = vdf_eval_and_prove(self.bits, g, self.T)
@@ -149,15 +149,15 @@ class AggregateVDF:
 if __name__ == "__main__":
     vdf = ToyVDF(256, 1 << 10)
     challenge = b"peko"
-    proof = vdf.prove(challenge)
+    proof = vdf.eval_and_prove(challenge)
     print(proof)
     print(vdf.verify(challenge, proof))
 
     avdf = AggregateVDF(256, 1 << 10)
-    challenge = [b"peko", b"peko2", b"peko3"]
-    ys = avdf.eval(challenge)
-    pi = avdf.aggregate(challenge, ys)
-    print(avdf.verify(challenge, ys, pi))
+    challenges = [b"peko", b"peko2", b"peko3"]
+    ys = avdf.eval(challenges)
+    pi = avdf.aggregate(challenges, ys)
+    print(avdf.verify(challenges, ys, pi))
 
     # bits = int(sys.argv[1])
     # x = bytes.fromhex(sys.argv[2])

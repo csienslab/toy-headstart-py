@@ -26,7 +26,7 @@ class ChiaVDF(AbstractVDF):
         self.form_size = 100
         self.g = initial_el = b"\x08" + (b"\x00" * 99)
 
-    def prove(self, challenge: bytes) -> ChiaProof:
+    def eval_and_prove(self, challenge: bytes) -> ChiaProof:
         discriminant_str = create_discriminant(challenge, self.bits)
         blob = prove(challenge, self.g, self.bits, self.T)
         result_y = blob[: self.form_size]
@@ -46,14 +46,17 @@ class ChiaVDF(AbstractVDF):
         return proof.result_y
 
 
-class SerializableChiaVDF(ChiaVDF):
-    def prove(self, challenge: bytes) -> bytes:
-        proof = super().prove(challenge)
+class SerializableChiaVDF(AbstractVDF):
+    def __init__(self, bits: int, T: int):
+        self.vdf = ChiaVDF(bits, T)
+
+    def eval_and_prove(self, challenge: bytes) -> bytes:
+        proof = self.vdf.eval_and_prove(challenge)
         return msgpack.packb((proof.discriminant_str, proof.result_y, proof.proof))
 
     def verify(self, challenge: bytes, proof: bytes) -> bool:
         d, y, pi = msgpack.unpackb(proof)
-        return super().verify(challenge, ChiaProof(d, y, pi))
+        return self.vdf.verify(challenge, ChiaProof(d, y, pi))
 
     def extract_y(self, proof: bytes) -> bytes:
         d, y, pi = msgpack.unpackb(proof)
@@ -90,7 +93,7 @@ if __name__ == "__main__":
     for cls in [ChiaVDF, SerializableChiaVDF]:
         vdf = cls(256, 1 << 10)
         challenge = b"peko"
-        proof = vdf.prove(challenge)
+        proof = vdf.eval_and_prove(challenge)
         print(proof)
         print(vdf.verify(challenge, proof))
         print(vdf.extract_y(proof))

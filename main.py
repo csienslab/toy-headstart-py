@@ -40,7 +40,7 @@ class VDFComputation:
         self.thread.start()
 
     def run(self):
-        self.proof = self.vdf.prove(self.challenge)
+        self.proof = self.vdf.eval_and_prove(self.challenge)
         self.done = True
 
     def get(self):

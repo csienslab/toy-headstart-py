@@ -4,7 +4,7 @@ import timeit, os
 
 def vdf_test(vdf: ChiaVDF):
     challenge = os.urandom(8)
-    proof = vdf.prove(challenge)
+    proof = vdf.eval_and_prove(challenge)
     assert vdf.verify(challenge, proof)
     y = vdf.extract_y(proof)
 

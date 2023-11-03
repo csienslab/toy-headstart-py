@@ -1,7 +1,15 @@
-from chiavdf import create_discriminant, prove, verify_wesolowski
+from chiavdf import (
+    create_discriminant,
+    prove,
+    verify_wesolowski,
+    aggvdf_eval,
+    aggvdf_prove,
+    aggvdf_verify,
+)
 from dataclasses import dataclass
 from abstract import AbstractVDF
 import msgpack
+from toy_vdf import H_D
 
 
 @dataclass
@@ -52,6 +60,32 @@ class SerializableChiaVDF(ChiaVDF):
         return y
 
 
+def int2bytes(x):
+    return int(x).to_bytes((x.bit_length() + 7) // 8, "big")
+
+
+def bytes2int(x):
+    return int.from_bytes(x, "big")
+
+
+class AggregateVDF:
+    AGGREGATION_DISCRIMINANT_SEED = b"totally non-backdoored seed"  # should be constant
+
+    def __init__(self, bits: int, T: int):
+        self.bits = bits
+        self.T = T
+        self.d = H_D(self.AGGREGATION_DISCRIMINANT_SEED, 256)
+
+    def eval(self, challenges: list[bytes]) -> list[bytes]:
+        return aggvdf_eval(int2bytes(-self.d), self.T, challenges)
+
+    def aggregate(self, challenges: list[bytes], ys: list[bytes]) -> bytes:
+        return aggvdf_prove(int2bytes(-self.d), self.T, challenges, ys)
+
+    def verify(self, challenges: list[bytes], ys: list[bytes], proof: bytes) -> bool:
+        return aggvdf_verify(int2bytes(-self.d), self.T, challenges, ys, proof)
+
+
 if __name__ == "__main__":
     for cls in [ChiaVDF, SerializableChiaVDF]:
         vdf = cls(256, 1 << 10)
@@ -60,3 +94,9 @@ if __name__ == "__main__":
         print(proof)
         print(vdf.verify(challenge, proof))
         print(vdf.extract_y(proof))
+
+    avdf = AggregateVDF(1024, 1 << 16)
+    challenges = [b"peko", b"peko2", b"peko3"]
+    ys = avdf.eval(challenges)
+    pi = avdf.aggregate(challenges, ys)
+    assert avdf.verify(challenges, ys, pi)

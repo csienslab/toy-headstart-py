@@ -55,7 +55,7 @@ class RandomnessBeacon:
             f"Starting next stage", extra={"stage": self.current_stage_index + 1}
         )
         self.current_stage.stop_contribution()
-        self.stages.append(Stage())
+        self.stages.append(Stage(self.current_stage))
 
     def register_scheduler(self):
         scheduler = BackgroundScheduler()

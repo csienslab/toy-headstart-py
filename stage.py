@@ -4,7 +4,8 @@ from chia_vdf import SerializableChiaVDF
 from hashlib import sha256
 from enum import Enum
 from threading import Thread, Lock
-import sys, os, random
+import sys, os, random, time
+from typing import Optional
 
 # This implements https://www.ndss-symposium.org/wp-content/uploads/2022-234-paper.pdf special case L=1
 
@@ -46,9 +47,10 @@ class VDFComputation:
 
 
 class Stage:
-    def __init__(self):
+    def __init__(self, prev_stage: Optional["Stage"] = None):
         self.data: list[bytes] = [b"DUMMY VALUE"]  # to prevent some errors
         self.phase = Phase.CONTRIBUTION
+        self.prev_stage = prev_stage
 
     def contribute(self, x: bytes):
         if self.phase != Phase.CONTRIBUTION:
@@ -61,9 +63,14 @@ class Stage:
             raise ValueError("not in contribution phase")
         self.phase = Phase.EVALUATION
         self.acc = Parameters.accumulator.accumulate(self.data)
-        self.vdf = VDFComputation(
-            Parameters.vdf, Parameters.accumulator.get_bytes(self.get_acc_val())
-        )
+        if self.prev_stage is None:
+            prev_stage_y = b""
+        else:
+            while self.prev_stage.phase < Phase.DONE:
+                time.sleep(1)
+            prev_stage_y = self.prev_stage.get_final_y()
+        vdf_challenge = self.hash(self.get_acc_val() + prev_stage_y)
+        self.vdf = VDFComputation(Parameters.vdf, vdf_challenge)
         self.vdf.run(callback=self.vdf_callback)
 
     def vdf_callback(self):
@@ -84,10 +91,13 @@ class Stage:
             raise ValueError("not in done phase")
         return self.vdf.get()
 
-    def get_final_randomness(self):
+    def get_final_y(self):
         proof = self.get_vdf_proof()
-        return self.hash_y_to_randomness(Parameters.vdf.extract_y(proof))
+        return Parameters.vdf.extract_y(proof)
+
+    def get_final_randomness(self):
+        return self.hash(self.get_final_y())
 
     @staticmethod
-    def hash_y_to_randomness(y: bytes):
+    def hash(y: bytes):
         return sha256(y).digest()

@@ -74,10 +74,8 @@ class HeadStartClient:
             ).content
         )
 
-    def __vdfproof(self, contribution: Contribution) -> bytes:
-        return msgpack.unpackb(
-            self.client.get(f"/api/stage/{contribution.stage}/vdfproof").content
-        )
+    def __vdfproof(self, stage: int) -> bytes:
+        return msgpack.unpackb(self.client.get(f"/api/stage/{stage}/vdfproof").content)
 
     def __randomness(self, stage_idx: int) -> bytes:
         return msgpack.unpackb(
@@ -90,14 +88,18 @@ class HeadStartClient:
         self.wait_for_phase(contribution.stage, Phase.DONE, polling_interval)
         val = self.__accval(contribution.stage)
         accproof = self.__accproof(contribution)
-        vdfproof = self.__vdfproof(contribution)
+        vdfproof = self.__vdfproof(contribution.stage)
         v1 = Parameters.accumulator.verify(val, accproof, contribution.value)
-        v2 = Parameters.vdf.verify(val, vdfproof)
+        prev_stage_y = (
+            Parameters.vdf.extract_y(self.__vdfproof(contribution.stage - 1))
+            if contribution.stage >= 1
+            else b""
+        )
+        vdf_challenge = Stage.hash(val + prev_stage_y)
+        v2 = Parameters.vdf.verify(vdf_challenge, vdfproof)
         if v1 and v2:
             randomness = self.__randomness(contribution.stage)
-            computed_randomness = Stage.hash_y_to_randomness(
-                Parameters.vdf.extract_y(vdfproof)
-            )
+            computed_randomness = Stage.hash(Parameters.vdf.extract_y(vdfproof))
             if randomness == computed_randomness:
                 return randomness
             else:

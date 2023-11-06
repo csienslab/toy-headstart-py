@@ -13,7 +13,7 @@ from toy_vdf import H_D
 
 
 @dataclass
-class ChiaProof:
+class ChiaEvalAndProof:
     discriminant_str: str
     result_y: bytes
     proof: bytes
@@ -26,15 +26,16 @@ class ChiaVDF(AbstractVDF):
         self.form_size = 100
         self.g = initial_el = b"\x08" + (b"\x00" * 99)
 
-    def eval_and_prove(self, challenge: bytes) -> ChiaProof:
+    def eval_and_prove(self, challenge: bytes) -> ChiaEvalAndProof:
         discriminant_str = create_discriminant(challenge, self.bits)
         blob = prove(challenge, self.g, self.bits, self.T)
         result_y = blob[: self.form_size]
         proof = blob[self.form_size :]
-        return ChiaProof(discriminant_str, result_y, proof)
+        return ChiaEvalAndProof(discriminant_str, result_y, proof)
 
-    def verify(self, challenge: bytes, proof: ChiaProof) -> bool:
-        return verify_wesolowski(
+    def verify(self, challenge: bytes, proof: ChiaEvalAndProof) -> bool:
+        same_disc = create_discriminant(challenge, self.bits) == proof.discriminant_str
+        return same_disc and verify_wesolowski(
             proof.discriminant_str,
             self.g,
             proof.result_y,
@@ -42,7 +43,7 @@ class ChiaVDF(AbstractVDF):
             self.T,
         )
 
-    def extract_y(self, proof: ChiaProof) -> bytes:
+    def extract_y(self, proof: ChiaEvalAndProof) -> bytes:
         return proof.result_y
 
 
@@ -56,7 +57,7 @@ class SerializableChiaVDF(AbstractVDF):
 
     def verify(self, challenge: bytes, proof: bytes) -> bool:
         d, y, pi = msgpack.unpackb(proof)
-        return self.vdf.verify(challenge, ChiaProof(d, y, pi))
+        return self.vdf.verify(challenge, ChiaEvalAndProof(d, y, pi))
 
     def extract_y(self, proof: bytes) -> bytes:
         d, y, pi = msgpack.unpackb(proof)

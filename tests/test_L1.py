@@ -1,9 +1,13 @@
-from merkle_tree import MerkleHash, MerkleTreeAccumulator, SortedMerkleTreeAccumulator
-from rsa_accumulator import RSAAccumulator, RSAPrimeAccumulator
-from bqf_accumulator import BQFAccumulator, ChiaBQFAccumulator
-from abstract import AbstractVDF
-from toy_vdf import ToyVDF
-from chia_vdf import ChiaVDF
+from headstart.acc.merkle_tree import (
+    MerkleHash,
+    MerkleTreeAccumulator,
+    SortedMerkleTreeAccumulator,
+)
+from headstart.acc.rsa_accumulator import RSAAccumulator, RSAPrimeAccumulator
+from headstart.acc.bqf_accumulator import BQFAccumulator, ChiaBQFAccumulator
+from headstart.abstract import AbstractVDF
+from headstart.vdf.toy_vdf import ToyVDF
+from headstart.vdf.chia_vdf import ChiaVDF
 from hashlib import sha256
 from enum import Enum
 from threading import Thread
@@ -103,7 +107,7 @@ class Client:
         if not Parameters.accumulator.verify(accval, proof, self.randomness):
             return False
         proof = server.get_proof()
-        if not Parameters.vdf.verify(accval, proof):
+        if not Parameters.vdf.verify(Parameters.accumulator.get_bytes(accval), proof):
             return False
         randomness = sha256(Parameters.vdf.extract_y(proof)).digest()
         if randomness != server.get_randomness():

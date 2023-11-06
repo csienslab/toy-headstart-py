@@ -1,7 +1,7 @@
-from rsa_accumulator import RSAAccumulator, RSAPrimeAccumulator
-from bqf_accumulator import BQFAccumulator, ChiaBQFAccumulator
-from merkle_tree import MerkleHash, MerkleTreeAccumulator
-from abstract import AbstractAccumulator
+from headstart.acc.rsa_accumulator import RSAAccumulator, RSAPrimeAccumulator
+from headstart.acc.bqf_accumulator import BQFAccumulator, ChiaBQFAccumulator
+from headstart.acc.merkle_tree import MerkleHash, MerkleTreeAccumulator
+from headstart.abstract import AbstractAccumulator
 from hashlib import sha256
 import os, timeit, random
 

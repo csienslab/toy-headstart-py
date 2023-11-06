@@ -1,4 +1,4 @@
-from chia_vdf import ChiaVDF
+from headstart.vdf.chia_vdf import ChiaVDF
 import timeit, os
 
 

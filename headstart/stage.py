@@ -1,6 +1,6 @@
-from merkle_tree import MerkleHash, MerkleTreeAccumulator
-from abstract import AbstractVDF
-from chia_vdf import SerializableChiaVDF
+from headstart.acc.merkle_tree import MerkleHash, MerkleTreeAccumulator
+from headstart.abstract import AbstractVDF
+from headstart.vdf.chia_vdf import SerializableChiaVDF
 from hashlib import sha256
 from enum import Enum
 from threading import Thread, Lock

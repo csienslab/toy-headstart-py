@@ -3,8 +3,8 @@ from werkzeug.exceptions import HTTPException
 from flask.json.provider import JSONProvider
 from apscheduler.schedulers.background import BackgroundScheduler
 import atexit, logging, base64, json, msgpack
-from stage import Stage, Phase
-import public_key
+from headstart.stage import Stage, Phase
+import headstart.public_key as public_key
 from cryptography.hazmat.primitives import serialization
 
 

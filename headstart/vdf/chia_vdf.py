@@ -7,9 +7,9 @@ from chiavdf import (
     aggvdf_verify,
 )
 from dataclasses import dataclass
-from abstract import AbstractVDF, AggregateVDF
+from headstart.abstract import AbstractVDF, AggregateVDF
 import msgpack
-from toy_vdf import H_D
+from headstart.vdf.toy_vdf import H_D
 
 
 @dataclass

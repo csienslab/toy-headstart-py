@@ -1,6 +1,6 @@
-from stage import Parameters, Phase, Stage
+from headstart.stage import Parameters, Phase, Stage
 from dataclasses import dataclass
-import httpx, base64, msgpack, time, public_key
+import httpx, base64, msgpack, time, headstart.public_key as public_key
 from cryptography.hazmat.primitives import serialization
 
 

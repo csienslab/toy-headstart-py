@@ -1,5 +1,5 @@
 from hashlib import sha256
-from abstract import AbstractAccumulator, AbstractUniversalAccumulator
+from headstart.abstract import AbstractAccumulator, AbstractUniversalAccumulator
 from typing import Optional
 from dataclasses import dataclass
 import bisect

@@ -1,10 +1,10 @@
-from bqf import BinaryQF, get_qf_principal_form, qf_pow, qf_frombytes, qf_tobytes
+from headstart.math.bqf import BinaryQF, get_qf_principal_form, qf_pow, qf_frombytes, qf_tobytes
 import gmpy2
 from hashlib import sha256, shake_256
 from typing import Generator
 from dataclasses import dataclass
-from abstract import AbstractVDF, AggregateVDF
-from utils import H_kgen, H_P
+from headstart.abstract import AbstractVDF, AggregateVDF
+from headstart.utils import H_kgen, H_P
 
 
 def H_D(x: bytes, k: int) -> int:

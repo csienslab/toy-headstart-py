@@ -5,8 +5,8 @@ from Crypto.Util.number import (
     bytes_to_long,
     long_to_bytes,
 )
-from bqf import BinaryQF, qf_pow, qf_tobytes
-from abstract import AbstractAccumulator
+from headstart.math.bqf import BinaryQF, qf_pow, qf_tobytes
+from headstart.abstract import AbstractAccumulator
 import chiavdf
 
 

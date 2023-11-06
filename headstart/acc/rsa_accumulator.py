@@ -1,7 +1,7 @@
 from Crypto.Util.number import getPrime, bytes_to_long, long_to_bytes
 import gmpy2, math
-from utils import H_P
-from abstract import AbstractAccumulator, AbstractUniversalAccumulator
+from headstart.utils import H_P
+from headstart.abstract import AbstractAccumulator, AbstractUniversalAccumulator
 
 
 class RSAAccumulator(AbstractAccumulator[int, int, int]):

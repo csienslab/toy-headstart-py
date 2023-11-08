@@ -2,6 +2,14 @@ from headstart.stage import Parameters, Phase, Stage
 from dataclasses import dataclass
 import httpx, base64, msgpack, time, headstart.public_key as public_key
 from cryptography.hazmat.primitives import serialization
+from typing import Optional, TypeVar
+
+T = TypeVar("T")
+
+
+def batched(l: list[T], n: int) -> T:
+    for i in range(0, len(l), n):
+        yield l[i : i + n]
 
 
 @dataclass
@@ -17,6 +25,11 @@ class StageInfo:
     stage: int
     phase: Phase
     contributions: int
+    accval: Optional[bytes] = None
+    vdfchallenge: Optional[bytes] = None
+    vdfy: Optional[bytes] = None
+    vdfproof: Optional[bytes] = None
+    randomness: Optional[bytes] = None
 
     def __init__(self, **kwargs):
         self.__dict__.update(kwargs)
@@ -30,11 +43,15 @@ class HeadStartClient:
         client = httpx.Client(base_url=url)
         pub_bytes = client.get("/api/pubkey").content
         pub_key = serialization.load_pem_public_key(pub_bytes)
-        return HeadStartClient(client, pub_key)
+        W = msgpack.unpackb(client.get("/api/beacon_config").content)["window_size"]
+        return HeadStartClient(client, pub_key, W)
 
-    def __init__(self, client: httpx.Client, pub_key: public_key.Ed25519PublicKey):
+    def __init__(
+        self, client: httpx.Client, pub_key: public_key.Ed25519PublicKey, W: int
+    ):
         self.client = client
         self.pub_key = pub_key
+        self.W = W
 
     def get_info(self) -> StageInfo:
         return StageInfo(**msgpack.unpackb(self.client.get("/api/info").content))
@@ -58,9 +75,18 @@ class HeadStartClient:
             **msgpack.unpackb(self.client.get(f"/api/stage/{stage_idx}").content)
         )
 
-    def wait_for_phase(self, stage_idx: int, phase: Phase, polling_interval=1):
-        while self.get_stage(stage_idx).phase < phase:
+    def get_stages(self, start: int, end: int) -> list[StageInfo]:
+        res = msgpack.unpackb(
+            self.client.get(f"/api/stage", params={"start": start, "end": end}).content
+        )
+        return [StageInfo(**x) for x in res]
+
+    def get_stage_until(
+        self, stage_idx: int, phase: Phase, polling_interval=1
+    ) -> StageInfo:
+        while (info := self.get_stage(stage_idx)).phase < phase:
             time.sleep(polling_interval)
+        return info
 
     def __accval(self, stage_idx: int) -> bytes:
         return msgpack.unpackb(
@@ -83,31 +109,82 @@ class HeadStartClient:
         )
 
     def get_verified_randomness(
-        self, contribution: Contribution, polling_interval=1
+        self, contribution: Contribution, stage_idx: int, polling_interval=1
     ) -> bytes:
-        self.wait_for_phase(contribution.stage, Phase.DONE, polling_interval)
-        val = self.__accval(contribution.stage)
-        accproof = self.__accproof(contribution)
-        vdfproof = self.__vdfproof(contribution.stage)
-        v1 = Parameters.accumulator.verify(val, accproof, contribution.value)
-        prev_stage_y = (
-            Parameters.vdf.extract_y(self.__vdfproof(contribution.stage - 1))
-            if contribution.stage >= 1
-            else b""
+        # self.get_stage_until(contribution.stage, Phase.DONE, polling_interval)
+        # val = self.__accval(contribution.stage)
+        # accproof = self.__accproof(contribution)
+        # vdfproof = self.__vdfproof(contribution.stage)
+        # v1 = Parameters.accumulator.verify(val, accproof, contribution.value)
+        # prev_stage_y = (
+        #     Parameters.vdf.extract_y(self.__vdfproof(contribution.stage - 1))
+        #     if contribution.stage >= 1
+        #     else b""
+        # )
+        # vdf_challenge = Stage.hash(val + prev_stage_y)
+        # v2 = Parameters.vdf.verify(vdf_challenge, vdfproof)
+        # if v1 and v2:
+        #     randomness = self.__randomness(contribution.stage)
+        #     computed_randomness = Stage.hash(Parameters.vdf.extract_y(vdfproof))
+        #     if randomness == computed_randomness:
+        #         return randomness
+        #     else:
+        #         raise ValueError(
+        #             "vdf verification succeeded, but randomness doesn't match"
+        #         )
+        # else:
+        #     raise ValueError("vdf verification failed")
+
+        self.get_stage_until(stage_idx, Phase.DONE, polling_interval)
+        # our contribution are at contribution.stage
+        # and we want to get the randomness at stage_idx
+        # each vdf proof in a stage proves [max(stage_idx - W + 1, 0), stage_idx] stages
+        # so we need to split the range into multiple ranges and round up correctly
+        # e.g. if stage_idx = 10, W = 5, contribution.stage = 7
+        # we need a proof for [6, 10]
+        # e.g. if stage_idx = 103, W = 10, contribution.stage = 77
+        # we need a proof for [74, 83], [84, 93], [94, 103]
+
+        ranges = []
+        target = stage_idx
+        while target >= contribution.stage:
+            ranges.append((max(target - self.W + 1, 0), target))
+            target -= self.W
+        ranges.reverse()
+        start = ranges[0][0]
+        end = ranges[-1][1]
+
+        extra, *stages = self.get_stages(
+            start - 1, end
+        )  # we want an extra one to get the y
+
+        # first, verify it is included in accumulator
+        contributed_stage = next(
+            stg for stg in stages if stg.stage == contribution.stage
         )
-        vdf_challenge = Stage.hash(val + prev_stage_y)
-        v2 = Parameters.vdf.verify(vdf_challenge, vdfproof)
-        if v1 and v2:
-            randomness = self.__randomness(contribution.stage)
-            computed_randomness = Stage.hash(Parameters.vdf.extract_y(vdfproof))
-            if randomness == computed_randomness:
-                return randomness
-            else:
-                raise ValueError(
-                    "vdf verification succeeded, but randomness doesn't match"
-                )
-        else:
-            raise ValueError("vdf verification failed")
+        accproof = self.__accproof(contribution)
+        if not Parameters.accumulator.verify(
+            contributed_stage.accval, accproof, contribution.value
+        ):
+            raise ValueError("accumulator verification failed")
+
+        # then we construct the challenges and ys
+        vdf_challenges = [
+            Parameters.hash(cur.accval + prev.vdfy)
+            for cur, prev in zip(stages, [extra] + stages)
+        ]
+        vdf_ys = [stg.vdfy for stg in stages]
+        # verify the vdf proofs
+        shifted_ranges = [(x - start, y - start) for x, y in ranges]
+        for st_idx, ed_idx in shifted_ranges:
+            challenges = vdf_challenges[st_idx : ed_idx + 1]
+            ys = vdf_ys[st_idx : ed_idx + 1]
+            proof = stages[ed_idx].vdfproof
+            if not Parameters.avdf.verify(challenges, ys, proof):
+                raise ValueError("vdf verification failed")
+
+        target_stage = next(stg for stg in stages if stg.stage == stage_idx)
+        return target_stage.vdfy
 
 
 if __name__ == "__main__":
@@ -115,6 +192,6 @@ if __name__ == "__main__":
     print(client.get_info())
     print(ct1 := client.contribute(b"peko"))
     print(ct2 := client.contribute(b"miko"))
-    print(client.get_verified_randomness(ct1))
-    print(client.get_verified_randomness(ct2))
+    print(client.get_verified_randomness(ct1, ct1.stage + 32))
+    print(client.get_verified_randomness(ct2, ct2.stage + 50))
     print(client.get_stage(ct1.stage))

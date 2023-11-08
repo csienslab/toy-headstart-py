@@ -104,3 +104,7 @@ if __name__ == "__main__":
     ys = avdf.eval(challenges)
     pi = avdf.aggregate(challenges, ys)
     assert avdf.verify(challenges, ys, pi)
+    challenges_extra = [b"peko4", b"peko5"]
+    ys_extra = avdf.eval(challenges_extra)
+    pi_all = avdf.aggregate(challenges + challenges_extra, ys + ys_extra)
+    assert avdf.verify(challenges + challenges_extra, ys + ys_extra, pi_all)

@@ -1,6 +1,6 @@
 from headstart.acc.merkle_tree import MerkleHash, MerkleTreeAccumulator
-from headstart.abstract import AbstractVDF
-from headstart.vdf.chia_vdf import SerializableChiaVDF
+from headstart.abstract import AggregateVDF
+from headstart.vdf.chia_vdf import SerializableChiaVDF, AggregateChiaVDF
 from hashlib import sha256
 from enum import Enum
 from threading import Thread, Lock
@@ -11,6 +11,7 @@ from typing import Optional
 
 
 class Phase(Enum):
+    NONE = 0
     CONTRIBUTION = 1
     EVALUATION = 2
     DONE = 3
@@ -18,16 +19,24 @@ class Phase(Enum):
     def __lt__(self, other):
         return self.value < other.value
 
+    def __ge__(self, other):
+        return self.value >= other.value
+
 
 class Parameters:
     accumulator = MerkleTreeAccumulator(MerkleHash(sha256))
-    T = 2**16
+    T = 2**10
     bits = 256
-    vdf = SerializableChiaVDF(bits, T)
+    # vdf = SerializableChiaVDF(bits, T)
+    avdf = AggregateChiaVDF(bits, T)
+
+    @staticmethod
+    def hash(y: bytes):
+        return sha256(y).digest()
 
 
 class VDFComputation:
-    def __init__(self, vdf: AbstractVDF, challenge: bytes):
+    def __init__(self, vdf: AggregateVDF, challenge: bytes):
         self.vdf = vdf
         self.challenge = challenge
         self.done = False
@@ -35,7 +44,7 @@ class VDFComputation:
         self.thread.start()
 
     def run(self, callback=None):
-        self.proof = self.vdf.eval_and_prove(self.challenge)
+        self.y = self.vdf.eval([self.challenge])[0]
         self.done = True
         if callback:
             callback()
@@ -43,14 +52,14 @@ class VDFComputation:
     def get(self):
         if not self.done:
             raise ValueError("not done yet")
-        return self.proof
+        return self.y
 
 
 class Stage:
-    def __init__(self, prev_stage: Optional["Stage"] = None):
+    def __init__(self, prev_stages: list["Stage"] = []):
         self.data: list[bytes] = [b"DUMMY VALUE"]  # to prevent some errors
         self.phase = Phase.CONTRIBUTION
-        self.prev_stage = prev_stage
+        self.prev_stages = prev_stages
 
     def contribute(self, x: bytes):
         if self.phase != Phase.CONTRIBUTION:
@@ -63,17 +72,24 @@ class Stage:
             raise ValueError("not in contribution phase")
         self.phase = Phase.EVALUATION
         self.acc = Parameters.accumulator.accumulate(self.data)
-        if self.prev_stage is None:
+        if len(self.prev_stages) == 0:
             prev_stage_y = b""
         else:
-            while self.prev_stage.phase < Phase.DONE:
+            prev = self.prev_stages[-1]
+            while prev.phase < Phase.DONE:
                 time.sleep(1)
-            prev_stage_y = self.prev_stage.get_final_y()
-        vdf_challenge = self.hash(self.get_acc_val() + prev_stage_y)
-        self.vdf = VDFComputation(Parameters.vdf, vdf_challenge)
-        self.vdf.run(callback=self.vdf_callback)
+            prev_stage_y = prev.get_final_y()
+        self.vdf_challenge = Parameters.hash(self.get_acc_val() + prev_stage_y)
+        self.vdf_thread = Thread(target=self.vdf_run)
+        self.vdf_thread.start()
 
-    def vdf_callback(self):
+    def vdf_run(self):
+        self.vdf_y = Parameters.avdf.eval([self.vdf_challenge])[0]
+        prev_challenges = [stage.vdf_challenge for stage in self.prev_stages]
+        prev_ys = [stage.vdf_y for stage in self.prev_stages]
+        self.vdf_proof = Parameters.avdf.aggregate(
+            prev_challenges + [self.vdf_challenge], prev_ys + [self.vdf_y]
+        )
         self.phase = Phase.DONE
 
     def get_acc_val(self):
@@ -89,15 +105,9 @@ class Stage:
     def get_vdf_proof(self):
         if self.phase < Phase.DONE:
             raise ValueError("not in done phase")
-        return self.vdf.get()
+        return self.vdf_proof
 
     def get_final_y(self):
-        proof = self.get_vdf_proof()
-        return Parameters.vdf.extract_y(proof)
-
-    def get_final_randomness(self):
-        return self.hash(self.get_final_y())
-
-    @staticmethod
-    def hash(y: bytes):
-        return sha256(y).digest()
+        if self.phase < Phase.DONE:
+            raise ValueError("not in done phase")
+        return self.vdf_y

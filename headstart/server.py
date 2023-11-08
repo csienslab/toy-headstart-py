@@ -18,7 +18,8 @@ class RandomnessBeacon:
     def __init__(self, logger: logging.Logger, priv_key: public_key.Ed25519PrivateKey):
         self.logger = logger
         self.stages: list[Stage] = [Stage()]
-        self.interval_seconds = 5
+        self.interval_seconds = 3
+        self.W = 10
         self.priv_key = priv_key
 
     @property
@@ -51,11 +52,10 @@ class RandomnessBeacon:
         return stage_idx, data_idx, sig
 
     def next_stage(self):
-        self.logger.info(
-            f"Starting next stage", extra={"stage": self.current_stage_index + 1}
-        )
+        self.logger.info(f"Starting next stage #{self.current_stage_index + 1}")
         self.current_stage.stop_contribution()
-        self.stages.append(Stage(self.current_stage))
+        prev_stages = self.stages[-self.W + 1 :]
+        self.stages.append(Stage(prev_stages))
 
     def register_scheduler(self):
         scheduler = BackgroundScheduler()
@@ -105,6 +105,16 @@ def pubkey():
     return resp
 
 
+@app.get("/api/beacon_config")
+def beacon_config():
+    return msgpackify(
+        {
+            "interval_seconds": beacon.interval_seconds,
+            "window_size": beacon.W,
+        }
+    )
+
+
 @app.get("/api/info")
 def info():
     return msgpackify(
@@ -131,37 +141,51 @@ def contribute():
     return msgpackify({"stage": stage_idx, "data_index": data_idx, "signature": sig})
 
 
+def get_stage(idx):
+    if idx == -1:
+        # for client implementation convenience
+        return {
+            "stage": -1,
+            "phase": "DONE",
+            "contributions": 0,
+            "vdfy": b"",
+            "accval": b"",
+            "vdfchallenge": b"",
+            "vdfproof": b"",
+            "randomness": b"",
+        }
+    try:
+        stage = beacon.get_stage(idx)
+    except ValueError:
+        return {"stage": idx, "phase": "NONE", "contributions": 0}
+    ret = {
+        "stage": idx,
+        "phase": stage.phase.name,
+        "contributions": len(stage.data),
+    }
+    if stage.phase >= Phase.EVALUATION:
+        ret["accval"] = stage.get_acc_val()
+        ret["vdfchallenge"] = stage.vdf_challenge  # should not be used by client
+    if stage.phase >= Phase.DONE:
+        ret["vdfy"] = stage.get_final_y()
+        ret["vdfproof"] = stage.get_vdf_proof()
+    return ret
+
+
+@app.get("/api/stage")
+def stages():
+    # inclusive
+    start_idx = int(request.args.get("start", 0))
+    end_idx = int(request.args.get("end", beacon.current_stage_index))
+    return msgpackify([get_stage(idx) for idx in range(start_idx, end_idx + 1)])
+
+
 @app.get("/api/stage/<int:stage_idx>")
 def stage(stage_idx):
-    stage = beacon.get_stage(stage_idx)
-    return msgpackify(
-        {
-            "stage": stage_idx,
-            "phase": stage.phase.name,
-            "contributions": len(stage.data),
-        }
-    )
-
-
-@app.get("/api/stage/<int:stage_idx>/accval")
-def accval(stage_idx):
-    stage = beacon.get_stage_after_phase(stage_idx, Phase.EVALUATION)
-    return msgpackify(stage.get_acc_val())
+    return msgpackify(get_stage(stage_idx))
 
 
 @app.get("/api/stage/<int:stage_idx>/accproof/<int:data_idx>")
 def accproof(stage_idx, data_idx):
     stage = beacon.get_stage_after_phase(stage_idx, Phase.EVALUATION)
     return msgpackify(stage.get_acc_proof(data_idx))
-
-
-@app.get("/api/stage/<int:stage_idx>/vdfproof")
-def vdfproof(stage_idx):
-    stage = beacon.get_stage_after_phase(stage_idx, Phase.DONE)
-    return msgpackify(stage.get_vdf_proof())
-
-
-@app.get("/api/stage/<int:stage_idx>/randomness")
-def randomness(stage_idx):
-    stage = beacon.get_stage_after_phase(stage_idx, Phase.DONE)
-    return msgpackify(stage.get_final_randomness())

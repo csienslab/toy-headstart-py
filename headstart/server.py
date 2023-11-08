@@ -165,7 +165,6 @@ def get_stage(idx):
     }
     if stage.phase >= Phase.EVALUATION:
         ret["accval"] = stage.get_acc_val()
-        ret["vdfchallenge"] = stage.vdf_challenge  # should not be used by client
     if stage.phase >= Phase.DONE:
         ret["vdfy"] = stage.get_final_y()
         ret["vdfproof"] = stage.get_vdf_proof()

@@ -2,14 +2,7 @@ from headstart.stage import Parameters, Phase, Stage
 from dataclasses import dataclass
 import httpx, base64, msgpack, time, headstart.public_key as public_key
 from cryptography.hazmat.primitives import serialization
-from typing import Optional, TypeVar
-
-T = TypeVar("T")
-
-
-def batched(l: list[T], n: int) -> T:
-    for i in range(0, len(l), n):
-        yield l[i : i + n]
+from typing import Optional
 
 
 @dataclass
@@ -26,10 +19,8 @@ class StageInfo:
     phase: Phase
     contributions: int
     accval: Optional[bytes] = None
-    vdfchallenge: Optional[bytes] = None
     vdfy: Optional[bytes] = None
     vdfproof: Optional[bytes] = None
-    randomness: Optional[bytes] = None
 
     def __init__(self, **kwargs):
         self.__dict__.update(kwargs)
@@ -111,30 +102,6 @@ class HeadStartClient:
     def get_verified_randomness(
         self, contribution: Contribution, stage_idx: int, polling_interval=1
     ) -> bytes:
-        # self.get_stage_until(contribution.stage, Phase.DONE, polling_interval)
-        # val = self.__accval(contribution.stage)
-        # accproof = self.__accproof(contribution)
-        # vdfproof = self.__vdfproof(contribution.stage)
-        # v1 = Parameters.accumulator.verify(val, accproof, contribution.value)
-        # prev_stage_y = (
-        #     Parameters.vdf.extract_y(self.__vdfproof(contribution.stage - 1))
-        #     if contribution.stage >= 1
-        #     else b""
-        # )
-        # vdf_challenge = Stage.hash(val + prev_stage_y)
-        # v2 = Parameters.vdf.verify(vdf_challenge, vdfproof)
-        # if v1 and v2:
-        #     randomness = self.__randomness(contribution.stage)
-        #     computed_randomness = Stage.hash(Parameters.vdf.extract_y(vdfproof))
-        #     if randomness == computed_randomness:
-        #         return randomness
-        #     else:
-        #         raise ValueError(
-        #             "vdf verification succeeded, but randomness doesn't match"
-        #         )
-        # else:
-        #     raise ValueError("vdf verification failed")
-
         self.get_stage_until(stage_idx, Phase.DONE, polling_interval)
         # our contribution are at contribution.stage
         # and we want to get the randomness at stage_idx

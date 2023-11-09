@@ -110,13 +110,13 @@ class HeadStartClient:
         # e.g. if stage_idx = 10, W = 5, contribution.stage = 7
         # we need a proof for [6, 10]
         # e.g. if stage_idx = 103, W = 10, contribution.stage = 77
-        # we need a proof for [74, 83], [84, 93], [94, 103]
+        # we need a proof for [76, 85], [85, 94], [94, 103]
 
         ranges = []
         target = stage_idx
         while target >= contribution.stage:
             ranges.append((max(target - self.W + 1, 0), target))
-            target -= self.W
+            target -= self.W - 1  # we want ranges overlap at least 1
         ranges.reverse()
         start = ranges[0][0]
         end = ranges[-1][1]

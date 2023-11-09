@@ -116,7 +116,7 @@ class HeadStartClient:
         target = stage_idx
         while target >= contribution.stage:
             ranges.append((max(target - self.W + 1, 0), target))
-            target -= self.W - 1  # we want ranges overlap at least 1
+            target -= self.W
         ranges.reverse()
         start = ranges[0][0]
         end = ranges[-1][1]
@@ -159,6 +159,6 @@ if __name__ == "__main__":
     print(client.get_info())
     print(ct1 := client.contribute(b"peko"))
     print(ct2 := client.contribute(b"miko"))
-    print(client.get_verified_randomness(ct1, ct1.stage + 32))
-    print(client.get_verified_randomness(ct2, ct2.stage + 50))
+    print(client.get_verified_randomness(ct1, ct1.stage + 12))
+    print(client.get_verified_randomness(ct2, ct2.stage + 22))
     print(client.get_stage(ct1.stage))

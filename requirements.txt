@@ -4,7 +4,7 @@ black==23.9.1
 blinker==1.6.3
 certifi==2023.7.22
 cffi==1.16.0
-chiavdf @ file:///home/maple3142/Projects/chaivdf
+chiavdf @ git+ssh://git@git.nslab.csie.ntu.edu.tw/maple3142/chiavdf.git
 click==8.1.7
 cryptography==41.0.5
 Flask==3.0.0

@@ -8,6 +8,8 @@ python -m venv venv
 pip install -r requirements.txt
 ```
 
+> Special note of anonymized version of this repo: To install `chiavdf` listed in `requirements.txt`, it is necessary to use this [fork](https://anonymous.4open.science/r/chaivdf-3666/README.md) of chaivdf.
+
 ## Run Server
 
 ```bash
